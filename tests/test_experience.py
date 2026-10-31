@@ -64,7 +64,9 @@ def test_narrative_autosave_version_conditions_and_review(web):
     send(web,org,'review',{'assessment':aid,'state':'submitted'},422)
     for q in data['questions']:
         if q['code']!='TPR-009':send(web,org,'response',{'assessment':aid,'code':q['code'],'response':'Example response','version':q['version']})
-    send(web,org,'review',{'assessment':aid,'state':'submitted'})
+    editor=invited(web,org,'editor','editor')
+    send(editor,org,'review',{'assessment':aid,'state':'submitted'})
+    send(editor,org,'review',{'assessment':aid,'state':'approved'},403)
     send(web,org,'response',{'assessment':aid,'code':'TPR-001','response':'locked','version':1},409)
     assert web.post('/api/call/save_questionnaire_response',json={'arguments':{'org':org,'assessment':aid,'code':'TPR-001','response':'locked'}}).status_code==409
     send(web,org,'review',{'assessment':aid,'state':'approved'})
