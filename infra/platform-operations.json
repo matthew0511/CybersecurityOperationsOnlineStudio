@@ -45,6 +45,15 @@
         "DISABLED",
         "ENABLED"
       ]
+    },
+    "SourceDbSubnetGroup": {
+      "Type": "String"
+    },
+    "SourceDbOptionGroup": {
+      "Type": "String"
+    },
+    "SourceDbParameterGroup": {
+      "Type": "String"
     }
   },
   "Resources": {
@@ -116,6 +125,15 @@
                     },
                     {
                       "Fn::Sub": "arn:${AWS::Partition}:rds:${AWS::Region}:${AWS::AccountId}:db:studio-restore-*"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:rds:${AWS::Region}:${AWS::AccountId}:subgrp:${SourceDbSubnetGroup}"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:rds:${AWS::Region}:${AWS::AccountId}:og:${SourceDbOptionGroup}"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:rds:${AWS::Region}:${AWS::AccountId}:pg:${SourceDbParameterGroup}"
                     }
                   ]
                 },
