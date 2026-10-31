@@ -23,3 +23,5 @@ Tests cover normalization, invalid files/oversized pixels, organization isolatio
 - Hardened non-root/read-only runtime container smoke test passed. ECR image `branding-20261031-v1` scanned with no findings at validation time; digest `sha256:1f2faddc6f160b1396205cd83917281571340f84f8df97e8c01daa6a4e4b6d05`.
 - Synthetic branded board/executive PDFs were rendered and inspected; exported PDF text includes the brand identity and fixed program owner attribution. Excel cover identities, embedded images, protected formula-like labels and fixed owner footers were checked.
 - Tests verify that viewer/editor/reviewer roles cannot change branding, organization data remains scoped, reminder settings survive branding changes, and both reporting surfaces share the same identity.
+
+Live rollout: ECS task definition `cyber-ops-online-studio-web:8` reached COMPLETED with two healthy tasks running the scanned image digest. The public custom domain returned healthy/database-ready responses; live JavaScript/CSS matched the tested source byte for byte, and the new branding settings endpoint returned HTTP 401 without authentication. Production owner credentials were not used.
