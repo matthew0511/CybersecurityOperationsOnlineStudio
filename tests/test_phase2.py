@@ -190,3 +190,28 @@ def test_notion_import_non_ascii_title_duplicate_detection(setup):
     preview=svc.preview_notion_csv(a,payload)
     assert preview['skipped']==1
     with pytest.raises(ValidationError):svc.import_notion_csv(a,payload,'risk.csv',confirmed=True)
+
+
+def test_third_party_default_snapshot_narratives_and_isolation(setup):
+    from cyberstudio.questionnaires import THIRD_PARTY_TEMPLATE_ID, THIRD_PARTY_QUESTIONS
+    svc, a, b, _ = setup
+    assessment = svc.create_assessment(a, 'Supplier review', template_id=THIRD_PARTY_TEMPLATE_ID)
+    second = svc.create_assessment(a, 'Second supplier', template_id=THIRD_PARTY_TEMPLATE_ID)
+    questions = svc.questions(a, assessment)
+    assert len(questions) == 60
+    assert [(q['code'], q['prompt'], q['domain']) for q in questions] == list(THIRD_PARTY_QUESTIONS)
+    assert questions[0]['prompt'] == 'Please provide your name'
+    assert questions[-1]['prompt'] == 'Have you booked an appointment'
+    svc.save_questionnaire_response(a, assessment, 'TPR-001', 'Example Name\nSecurity Manager')
+    assert svc.questions(a, assessment)[0]['rationale'] == 'Example Name\nSecurity Manager'
+    assert svc.questions(a, assessment)[0]['answer'] == 'Unknown'
+    assert svc.questions(a, second)[0]['rationale'] == ''
+    with pytest.raises(NotFoundError):
+        svc.save_questionnaire_response(b, assessment, 'TPR-001', 'Blocked')
+    with pytest.raises(ValidationError):
+        svc.save_questionnaire_response(a, assessment, 'TPR-001', 'x' * 5001)
+    with pytest.raises(NotFoundError):
+        svc.save_questionnaire_response(a, assessment, 'TPR-999', 'Missing')
+    svc.save_questionnaire_response(a, assessment, 'TPR-001', '')
+    assert svc.questions(a, assessment)[0]['answer'] == 'Unanswered'
+    assert len(svc.questions(a, svc.create_assessment(a, 'Baseline'))) == 8
