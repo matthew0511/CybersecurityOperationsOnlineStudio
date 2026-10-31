@@ -2,6 +2,7 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const {execFileSync}=require('node:child_process');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const platformCatalog=JSON.parse(execFileSync('python',['-c',"import json;from cyberstudio.web.platform.catalog import features,modules;from cyberstudio.web.platform.connectors import PROVIDERS;from cyberstudio.web.platform.reporting import TEMPLATES;from cyberstudio.web.platform.documentation import documentation;print(json.dumps(dict(features=features(),modules=modules(),providers=PROVIDERS,report_templates=TEMPLATES,role='owner',docs=documentation())))"],{env:{...process.env,PYTHONPATH:'src'},encoding:'utf8'}));
 const staticRoot=path.resolve('src/cyberstudio/web/static');
 const questions=JSON.parse(execFileSync('python',['-c',"import json;from cyberstudio.questionnaires import THIRD_PARTY_QUESTIONS;print(json.dumps([dict(code=c,prompt=p,rationale='',version=0,visible=True,section=('HIPAA' if 8<=int(c[-3:])<=15 else 'Questions'),evidence=[]) for c,p,d in THIRD_PARTY_QUESTIONS]))"],{env:{...process.env,PYTHONPATH:'src'},encoding:'utf8'}));
 const org='test-org',assessment='test-assessment';let saved=0,brandingSaved=0;
@@ -12,6 +13,11 @@ const state={role:'owner',settings:{brand_name:'Synthetic Brand',accent:'#097f7a
 const methods={list_organizations:[{id:org,name:'Synthetic Org'}],board_snapshot:{},list_risks:[],list_tasks:[task],vendors:[],findings:[],frameworks:[],implementations:[],evidence:[],list_assessments:[{id:assessment,title:'Synthetic supplier questionnaire',status:'draft',framework_label:'Third-party risk assessment — Default (60 questions), v1'}],list_templates:[],board_reports:[]};
 (async()=>{const browser=await chromium.launch({headless:true,args:['--no-sandbox']});const page=await browser.newPage({viewport:{width:1440,height:1000}});let errors=[];page.on('pageerror',e=>errors.push(e.message));
 await page.route('**/*',async route=>{const req=route.request(),url=new URL(req.url()),p=url.pathname;const json=value=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(value)});let body={};try{body=req.postDataJSON()||{};}catch{}
+if(p==='/api/platform/catalog')return json(platformCatalog);
+if(p==='/api/platform/documentation')return json(platformCatalog.docs);
+if(p==='/api/security')return json({username:'owner',role:'owner',mfa_enabled:false,security_key_ready:true,sessions:[],entra_configured:false});
+if(p==='/api/platform/'+org+'/overview')return json({counts:[],executions:[],quarantine:[],editions:[],role:'owner'});
+if(p.startsWith('/api/platform/')&&(p.includes('/records/')||p.endsWith('/integrations')||p.endsWith('/jobs')))return json([]);
 if(p==='/api/me')return json({username:'owner',csrf:'test',role:'owner'});
 if(p==='/api/operations')return json({create_assessment:{write:true,fields:[{name:'org',required:true,kind:'string'},{name:'title',required:true,kind:'string'},{name:'scope',required:false,kind:'string',default:''},{name:'template_id',required:false,kind:'string',default:null}]}});
 if(p.startsWith('/api/call/')){const method=p.split('/').pop();return json({result:methods[method]||[]});}
@@ -27,7 +33,7 @@ if(p.includes('/search'))return json({results:[{type:'task',id:'task1',title:tas
 if(p.includes('/record/'))return json({record:task,links:[],reviews:[],comments:[]});
 if(p.endsWith('/reports/preview'))return json({brand:'Synthetic Brand',organization:'Synthetic Org',period_note:'Current summary; dated records in selected period.',commentary:body.commentary,sections:{summary:[{metric:'open_tasks',value:1}]}});
 if(p.startsWith('/api/'))return json({});
-const file=p==='/'?'index.html':p.replace('/static/','');const full=path.join(staticRoot,file);if(!full.startsWith(staticRoot)||!fs.existsSync(full))return route.fulfill({status:404,body:'Not found'});return route.fulfill({status:200,contentType:file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':'text/html',body:fs.readFileSync(full)});
+const file=p==='/'?'index.html':p==='/documentation'?'documentation.html':p.replace('/static/','');const full=path.join(staticRoot,file);if(!full.startsWith(staticRoot)||!fs.existsSync(full))return route.fulfill({status:404,body:'Not found'});return route.fulfill({status:200,contentType:file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':'text/html',body:fs.readFileSync(full)});
 });
 await page.goto('https://studio.test/');await page.waitForFunction(()=>typeof XP!=='undefined'&&XP.state?.role==='owner');
 assert.equal(await page.locator('.header-context .eyebrow').textContent(),'Synthetic Brand');
@@ -44,6 +50,13 @@ await page.locator('[data-page=reports]').click();await page.getByLabel('Report 
 await page.getByLabel('Theme',{exact:true}).selectOption('dark');assert.equal(await page.locator('html').getAttribute('data-theme'),'dark');
 await page.keyboard.press('Control+k');await page.locator('#xp-dialog input[type=search]').fill('remediation');await page.getByRole('button',{name:'Task · Synthetic remediation',exact:true}).waitFor();await page.locator('#xp-dialog').getByRole('button',{name:'Close',exact:true}).click();
 await page.getByRole('button',{name:'Workspace hub',exact:true}).click();await page.getByRole('button',{name:'Team & invitations',exact:true}).click();await page.getByRole('heading',{name:'Create an invitation',exact:true}).waitFor();
+await page.getByRole('button',{name:'Program center',exact:true}).click();await page.getByLabel('Program module',{exact:true}).waitFor();
+await page.getByRole('button',{name:'Create record',exact:true}).click();await page.getByRole('dialog').getByLabel('Title',{exact:true}).fill('Synthetic office');await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
+await page.getByRole('button',{name:'App integrations',exact:true}).click();await page.getByRole('heading',{name:'Connected applications',exact:true}).waitFor();
+await page.getByRole('button',{name:'Account security',exact:true}).click();await page.getByRole('button',{name:'Begin authenticator enrollment',exact:true}).waitFor();
+if(process.env.AXE_MODULE){await page.addScriptTag({path:require.resolve(process.env.AXE_MODULE)});const results=await page.evaluate(async()=>await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}));assert.deepEqual(results.violations.filter(v=>['critical','serious'].includes(v.impact)).map(v=>({id:v.id,nodes:v.nodes.map(n=>n.target)})),[]);}
+await page.goto('https://studio.test/documentation');await page.getByText('50. Recycle bin and restoration',{exact:true}).waitFor();await page.getByLabel('Search documentation',{exact:true}).fill('authenticator');assert.ok(await page.locator('[data-searchable]:visible').count()>0);
+await page.goto('https://studio.test/');await page.waitForFunction(()=>typeof XP!=='undefined'&&XP.state?.role==='owner');
 await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'Actions',exact:true}).click();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,'Mobile viewport must not overflow horizontally');
 assert.equal(saved,1);assert.deepEqual(errors,[]);await page.screenshot({path:'/tmp/studio-experience-ui.png',fullPage:true});console.log('EXPERIENCE_BROWSER_ACCEPTANCE_PASSED: branding, questionnaire autosave/conditions/review, board status, report preview, themes, search, invitations, mobile layout');await browser.close();
 })().catch(e=>{console.error(e);process.exit(1);});

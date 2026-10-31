@@ -24,7 +24,7 @@ def access(db,user,org,write=False,capability='records:write'):
     return role
 
 def get(db,org,ident,kind=None,deleted=False):
-    row=db.execute('SELECT * FROM pl_records WHERE organization_id=%s AND id=%s'+('' if deleted else ' AND deleted_at IS NULL'),(org,ident)).fetchone()
+    row=db.execute('SELECT * FROM pl_records WHERE organization_id=%s AND id=%s AND (%s OR deleted_at IS NULL)',(org,ident,deleted)).fetchone()
     if not row or kind and row['kind']!=kind:fail('Record not found in this organization',404)
     return dict(row)
 

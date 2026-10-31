@@ -1,0 +1,293 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Online Studio platform security keys, versioned malware quarantine and operations alert destination",
+  "Resources": {
+    "AuthKey": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Description": "Online Studio platform AuthKey",
+        "GenerateSecretString": {
+          "PasswordLength": 48,
+          "ExcludePunctuation": true
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          }
+        ]
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "PlatformDatabase": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Description": "Online Studio platform PlatformDatabase",
+        "GenerateSecretString": {
+          "PasswordLength": 48,
+          "ExcludePunctuation": true,
+          "SecretStringTemplate": "{\"username\": \"studioapp_platform\"}",
+          "GenerateStringKey": "password"
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          }
+        ]
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "ScanBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "ExpireScanCopies",
+              "Status": "Enabled",
+              "Prefix": "uploads/",
+              "ExpirationInDays": 7,
+              "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 7
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          }
+        ]
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "ScanPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "ScanBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "ScanBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${ScanBucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "ScanRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "malware-protection-plan.guardduty.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ManagedScanner",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "events:PutRule",
+                    "events:DeleteRule",
+                    "events:PutTargets",
+                    "events:RemoveTargets"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/DO-NOT-DELETE-AmazonGuardDutyMalwareProtectionS3*"
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "events:ManagedBy": "malware-protection-plan.guardduty.amazonaws.com"
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "events:DescribeRule",
+                    "events:ListTargetsByRule"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/DO-NOT-DELETE-AmazonGuardDutyMalwareProtectionS3*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObjectTagging",
+                    "s3:PutObjectTagging",
+                    "s3:GetObjectVersionTagging",
+                    "s3:PutObjectVersionTagging",
+                    "s3:GetObject",
+                    "s3:GetObjectVersion"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${ScanBucket.Arn}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetBucketNotification",
+                    "s3:PutBucketNotification",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "ScanBucket",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${ScanBucket.Arn}/malware-protection-resource-validation-object"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          }
+        ]
+      }
+    },
+    "Scanner": {
+      "Type": "AWS::GuardDuty::MalwareProtectionPlan",
+      "Properties": {
+        "Role": {
+          "Fn::GetAtt": [
+            "ScanRole",
+            "Arn"
+          ]
+        },
+        "ProtectedResource": {
+          "S3Bucket": {
+            "BucketName": {
+              "Ref": "ScanBucket"
+            },
+            "ObjectPrefixes": [
+              "uploads/"
+            ]
+          }
+        },
+        "Actions": {
+          "Tagging": {
+            "Status": "ENABLED"
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          }
+        ]
+      }
+    },
+    "Alerts": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "DisplayName": "Online Studio operations",
+        "KmsMasterKeyId": "alias/aws/sns",
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "AuthKey": {
+      "Value": {
+        "Ref": "AuthKey"
+      }
+    },
+    "PlatformDatabase": {
+      "Value": {
+        "Ref": "PlatformDatabase"
+      }
+    },
+    "ScanBucket": {
+      "Value": {
+        "Ref": "ScanBucket"
+      }
+    },
+    "Alerts": {
+      "Value": {
+        "Ref": "Alerts"
+      }
+    }
+  }
+}

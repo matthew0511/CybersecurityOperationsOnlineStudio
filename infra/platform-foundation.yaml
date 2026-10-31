@@ -1,0 +1,257 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Cyber Security Operations Online Studio - AWS bootstrap infrastructure.
+  PRIVATE Fargate diagnostic only; this does not deploy the Studio application.
+Parameters:
+  ExistingRepositoryUri:
+    Type: String
+    Description: Existing retained ECR repository URI
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, production]
+  DBInstanceClass:
+    Type: String
+    Default: db.t4g.small
+    AllowedValues: [db.t4g.micro, db.t4g.small, db.t4g.medium]
+  DBMultiAZ:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+  DBDeletionProtection:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+Conditions:
+  UseMultiAZ: !Equals [!Ref DBMultiAZ, 'true']
+  ProtectDB: !Equals [!Ref DBDeletionProtection, 'true']
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.77.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - {Key: Name, Value: !Sub '${AWS::StackName}-vpc'}
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+  IGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.77.0.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-public-a'}]
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.77.1.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-public-b'}]
+  PrivateAppSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.77.10.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-app-a'}]
+  PrivateAppSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.77.11.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-app-b'}]
+  PrivateDBSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.77.20.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-db-a'}]
+  PrivateDBSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.77.21.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags: [{Key: Name, Value: !Sub '${AWS::StackName}-db-b'}]
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties: {VpcId: !Ref VPC}
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: IGWAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  PublicAssocA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PublicSubnetA, RouteTableId: !Ref PublicRouteTable}
+  PublicAssocB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PublicSubnetB, RouteTableId: !Ref PublicRouteTable}
+  NatEIPA:
+    Type: AWS::EC2::EIP
+    DependsOn: IGWAttachment
+    Properties: {Domain: vpc}
+  NatEIPB:
+    Type: AWS::EC2::EIP
+    DependsOn: IGWAttachment
+    Properties: {Domain: vpc}
+  NatA:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      AllocationId: !GetAtt NatEIPA.AllocationId
+  NatB:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      AllocationId: !GetAtt NatEIPB.AllocationId
+  AppRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties: {VpcId: !Ref VPC}
+  AppRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties: {VpcId: !Ref VPC}
+  AppRouteA:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref AppRouteTableA
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatA
+  AppRouteB:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref AppRouteTableB
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatB
+  AppAssocA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PrivateAppSubnetA, RouteTableId: !Ref AppRouteTableA}
+  AppAssocB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PrivateAppSubnetB, RouteTableId: !Ref AppRouteTableB}
+  DBRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties: {VpcId: !Ref VPC}
+  DBAssocA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PrivateDBSubnetA, RouteTableId: !Ref DBRouteTable}
+  DBAssocB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: {SubnetId: !Ref PrivateDBSubnetB, RouteTableId: !Ref DBRouteTable}
+  TaskSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Egress for Fargate (no inbound access during bootstrap)
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - {IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0, Description: TLS egress via NAT}
+  DBSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: RDS accepts PostgreSQL from ECS tasks only
+      VpcId: !Ref VPC
+  TaskToDBEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref TaskSG
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      DestinationSecurityGroupId: !Ref DBSG
+      Description: PostgreSQL to isolated RDS
+  DBFromTaskIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DBSG
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref TaskSG
+      Description: PostgreSQL from ECS tasks only
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Two isolated database subnets (no default egress route)
+      SubnetIds: [!Ref PrivateDBSubnetA, !Ref PrivateDBSubnetB]
+  PostgreSQL:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      Engine: postgres
+      DBInstanceClass: !Ref DBInstanceClass
+      AllocatedStorage: 20
+      StorageType: gp3
+      StorageEncrypted: true
+      DBName: cyberops
+      Port: '5432'
+      MasterUsername: studioadmin
+      ManageMasterUserPassword: true
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups: [!Ref DBSG]
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 14
+      MultiAZ: !If [UseMultiAZ, true, false]
+      DeletionProtection: !If [ProtectDB, true, false]
+      AutoMinorVersionUpgrade: true
+      CopyTagsToSnapshot: true
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub 'cyber-ops-online-studio-${Environment}'
+      ClusterSettings: [{Name: containerInsights, Value: enabled}]
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/cyber-ops-online-studio-${Environment}'
+      RetentionInDays: 30
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: ecs-tasks.amazonaws.com}
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: {Service: ecs-tasks.amazonaws.com}
+            Action: sts:AssumeRole
+Outputs:
+  VpcId: {Value: !Ref VPC}
+  PrivateAppSubnetA: {Value: !Ref PrivateAppSubnetA}
+  PrivateAppSubnetB: {Value: !Ref PrivateAppSubnetB}
+  PrivateDBSubnetA: {Value: !Ref PrivateDBSubnetA}
+  PrivateDBSubnetB: {Value: !Ref PrivateDBSubnetB}
+  TaskSecurityGroupId: {Value: !Ref TaskSG}
+  ClusterName: {Value: !Ref ECSCluster}
+  ImageRepositoryUri: {Value: !Ref ExistingRepositoryUri}
+  ExecutionRoleArn: {Value: !GetAtt ExecutionRole.Arn}
+  TaskRoleArn: {Value: !GetAtt TaskRole.Arn}
+  LogGroupName: {Value: !Ref LogGroup}
+  RDSAddress: {Value: !GetAtt PostgreSQL.Endpoint.Address}
+  RDSPort: {Value: !GetAtt PostgreSQL.Endpoint.Port}
+  RDSMasterSecretArn: {Value: !GetAtt PostgreSQL.MasterUserSecret.SecretArn}
+

@@ -93,6 +93,53 @@ def test_mfa_requirement_does_not_lock_out_enrollment(web):
     assert web.post('/api/security/mfa_begin',json={'password':PW}).status_code==200
 
 
+def test_enrollment_consumes_actual_future_window_code(web,monkeypatch):
+    setup(web);clock=int(time.time());monkeypatch.setattr(security.time,'time',lambda:clock)
+    secret=web.post('/api/security/mfa_begin',json={'password':PW}).json()['secret']
+    code=pyotp.TOTP(secret).at(clock+30)
+    assert web.post('/api/security/mfa_enable',json={'code':code}).status_code==200
+    other=TestClient(app,base_url='https://testserver')
+    assert other.post('/api/login',json={'username':'owner','password':PW,'mfa_code':code}).status_code==401
+
+
+def test_entra_signature_state_nonce_mapping_and_one_use(web,monkeypatch):
+    import jwt
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from urllib.parse import urlparse,parse_qs
+    setup(web)
+    tenant='11111111-1111-1111-1111-111111111111';client_id='22222222-2222-2222-2222-222222222222';oid='33333333-3333-3333-3333-333333333333'
+    assert web.post('/api/security/entra',json={'tenant_id':tenant,'client_id':client_id,'client_secret':'synthetic','enabled':True,'password':PW}).status_code==200
+    assert web.post('/api/security/entra_map',json={'object_id':oid,'username':'owner','password':PW}).status_code==200
+    key=rsa.generate_private_key(public_exponent=65537,key_size=2048)
+    jwk=json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(key.public_key()));jwk['kid']='test-key'
+    mode={'nonce':None,'bad_signature':False,'bad_nonce':False,'unmapped':False}
+    original=httpx.Client
+    def transport(req):
+        assert req.url.host=='login.microsoftonline.com'
+        if req.url.path.endswith('/keys'):return httpx.Response(200,json={'keys':[jwk]})
+        assert req.url.path==f'/{tenant}/oauth2/v2.0/token'
+        now=int(time.time());claims={'iss':f'https://login.microsoftonline.com/{tenant}/v2.0','aud':client_id,'exp':now+300,'iat':now,'nonce':'wrong' if mode['bad_nonce'] else mode['nonce'],'oid':'44444444-4444-4444-4444-444444444444' if mode['unmapped'] else oid,'tid':tenant,'sub':'synthetic'}
+        signing=rsa.generate_private_key(public_exponent=65537,key_size=2048) if mode['bad_signature'] else key
+        return httpx.Response(200,json={'id_token':jwt.encode(claims,signing,algorithm='RS256',headers={'kid':'test-key'})})
+    monkeypatch.setattr(security.httpx,'Client',lambda **kwargs:original(transport=httpx.MockTransport(transport),**kwargs))
+    public=TestClient(app,base_url='https://testserver',follow_redirects=False)
+    def begin():
+        response=public.get('/api/sso/start');assert response.status_code==307
+        query=parse_qs(urlparse(response.headers['location']).query);mode['nonce']=query['nonce'][0]
+        assert query['code_challenge_method']==['S256']
+        return query['state'][0]
+    state=begin()
+    assert public.get('/api/sso/callback',params={'code':'synthetic','state':'wrong'}).status_code==403
+    for flag in ['bad_signature','bad_nonce','unmapped']:
+        state=begin();mode[flag]=True
+        assert public.get('/api/sso/callback',params={'code':'synthetic','state':state}).status_code==403
+        mode[flag]=False
+    state=begin();response=public.get('/api/sso/callback',params={'code':'synthetic','state':state})
+    assert response.status_code==303,response.text
+    assert public.get('/api/me').json()['username']=='owner'
+    assert public.get('/api/sso/callback',params={'code':'synthetic','state':state}).status_code==403
+
+
 def test_runbooks_bia_and_execution_order(web):
     org,_=setup(web);asset=save(web,org,'asset','Service',{'asset_type':'business_service'})
     bia=save(web,org,'bia','BIA',{'asset_id':asset['id'],'rto_hours':8,'rpo_hours':4});assert bia['data']['rto_hours']==8

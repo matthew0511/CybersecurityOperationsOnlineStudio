@@ -8,7 +8,7 @@ version = "0.4.0"
 description = "Offline-first cybersecurity operations desktop prototype with control evaluations, vendors, vulnerabilities, evidence freshness and Notion migrations"
 requires-python = ">=3.11"
 dependencies = [
-    "cryptography>=44,<48",
+    "cryptography>=50.0.2,<51",
     "argon2-cffi>=23,<26",
     "filelock>=3.12,<4",
     "reportlab>=4.2,<5",

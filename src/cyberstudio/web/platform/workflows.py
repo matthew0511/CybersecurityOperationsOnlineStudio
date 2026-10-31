@@ -70,7 +70,7 @@ def trash(db,user,org,kind,ident,restore=False):
     if kind=='program':
         record=get(db,org,ident,deleted=True)
         if not restore and record['kind'] in {'policy','answer','risk_approval','exception'} and record['status'] in {'approved','active'}:fail('Close the approved record before archiving it',409)
-        db.execute('UPDATE pl_records SET deleted_at='+('NULL' if restore else 'CURRENT_TIMESTAMP')+',version=version+1,updated_by=%s WHERE organization_id=%s AND id=%s',(user['username'],org,ident))
+        db.execute('UPDATE pl_records SET deleted_at=CASE WHEN %s THEN NULL ELSE CURRENT_TIMESTAMP END,version=version+1,updated_by=%s WHERE organization_id=%s AND id=%s',(restore,user['username'],org,ident))
     else:
         if kind not in LEGACY:fail('Unsupported archive type')
         if restore:
@@ -96,6 +96,13 @@ def catalog_import(db,user,org,raw,name,edition,source,license_note,confirmed):
     if len(set(codes))!=len(codes) or any(not c for c in codes):fail('Control codes must be nonempty and unique')
     for r in rows:
         if r.get('parent_code') and r['parent_code'] not in codes:fail('Parent control code must exist in the imported version')
+    parents={r['code']:r.get('parent_code','') for r in rows}
+    for code in codes:
+        seen=set();current=code
+        while current:
+            if current in seen:fail('Control hierarchy cannot contain cycles')
+            seen.add(current);current=parents.get(current,'')
+    if not all(str(v).strip() for v in [name,edition,source,license_note]) or any(not r['title'].strip() for r in rows):fail('Provide catalog provenance and nonempty control titles')
     ident=uid();db.execute('INSERT INTO pl_catalogs(id,organization_id,name,edition,source,license_note,sha256,created_by) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)',(ident,org,bounded(name,200),bounded(edition,100),bounded(source,1000),bounded(license_note,2000),hashlib.sha256(raw).hexdigest(),user['username']))
     with db.cursor() as cursor:cursor.executemany('INSERT INTO pl_controls VALUES (%s,%s,%s,%s,%s)',[(org,ident,bounded(r['code'],100),bounded(r['title'],3000),bounded(r.get('parent_code',''),100)) for r in rows])
     history(db,org,ident,user['username'],'catalog:imported',{'name':name,'edition':edition,'controls':len(rows),'source':source,'license_note':license_note});return {'id':ident,'controls':len(rows)}
