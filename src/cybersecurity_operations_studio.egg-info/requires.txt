@@ -1,0 +1,11 @@
+cryptography<48,>=44
+argon2-cffi<26,>=23
+filelock<4,>=3.12
+reportlab<5,>=4.2
+openpyxl<4,>=3.1
+platformdirs<5,>=4.0
+PySide6<7,>=6.7
+
+[dev]
+pytest<10,>=8
+ruff<1,>=0.8

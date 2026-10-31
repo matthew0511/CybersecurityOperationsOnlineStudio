@@ -1,0 +1,15 @@
+Metadata-Version: 2.4
+Name: cybersecurity-operations-studio
+Version: 0.3.0
+Summary: Offline-first cybersecurity operations desktop prototype with control evaluations, vendors, vulnerabilities, evidence freshness and Notion migrations
+Requires-Python: >=3.11
+Requires-Dist: cryptography<48,>=44
+Requires-Dist: argon2-cffi<26,>=23
+Requires-Dist: filelock<4,>=3.12
+Requires-Dist: reportlab<5,>=4.2
+Requires-Dist: openpyxl<4,>=3.1
+Requires-Dist: platformdirs<5,>=4.0
+Requires-Dist: PySide6<7,>=6.7
+Provides-Extra: dev
+Requires-Dist: pytest<10,>=8; extra == "dev"
+Requires-Dist: ruff<1,>=0.8; extra == "dev"

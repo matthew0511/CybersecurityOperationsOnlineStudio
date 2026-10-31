@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cybersecurity-operations-studio"
+version = "0.3.0"
+description = "Offline-first cybersecurity operations desktop prototype with control evaluations, vendors, vulnerabilities, evidence freshness and Notion migrations"
+requires-python = ">=3.11"
+dependencies = [
+    "cryptography>=44,<48",
+    "argon2-cffi>=23,<26",
+    "filelock>=3.12,<4",
+    "reportlab>=4.2,<5",
+    "openpyxl>=3.1,<4",
+    "platformdirs>=4.0,<5",
+    "PySide6>=6.7,<7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "ruff>=0.8,<1"]
+
+[project.scripts]
+cyberstudio = "cyberstudio.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 105

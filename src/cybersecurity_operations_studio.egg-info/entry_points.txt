@@ -1,0 +1,2 @@
+[console_scripts]
+cyberstudio = cyberstudio.app:main

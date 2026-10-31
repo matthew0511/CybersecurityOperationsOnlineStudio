@@ -1,0 +1,4 @@
+Risk Name,Description,Probability,Impact,Risk Score,Client,Treatment Status,Sign Off Authorization
+Synthetic MFA Coverage Gap,Example: privileged accounts lack enforced MFA,4,5,20,,,
+Synthetic Backup Restore Gap,Example: recovery procedure not tested,3,4,12,,,
+Synthetic Vendor Review Gap,Example: service providers have outdated security reviews,2,4,8,,,
