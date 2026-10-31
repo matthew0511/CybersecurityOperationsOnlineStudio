@@ -28,6 +28,9 @@ template={'AWSTemplateFormatVersion':'2010-09-09','Description':'Online Studio p
 t=json.loads((ROOT/'platform-runtime-base.json').read_text());p=t['Parameters'];rr=t['Resources']
 for name in ['PlatformDbSecretArn','AuthKeySecretArn','ScanBucketName']:p[name]={'Type':'String'}
 p['EnablePlatform']={'Type':'String','Default':'false','AllowedValues':['true','false']}
+p['SourceCommit']={'Type':'String','AllowedPattern':'[a-f0-9]{40}','Description':'Pinned and validated GitHub source commit for the default build'}
+rr['Builder']['Properties']['Source']={'Type':'GITHUB','Location':'https://github.com/matthew0511/CybersecurityOperationsOnlineStudio.git','BuildSpec':'infra/experience-buildspec.yml'}
+rr['Builder']['Properties']['SourceVersion']=R('SourceCommit')
 t['Conditions']['PlatformEnabled']={'Fn::Equals':[R('EnablePlatform'),'true']}
 for name in ['RuntimeExecutionRole','MigrationExecutionRole']:
     statements=rr[name]['Properties']['Policies'][0]['PolicyDocument']['Statement']
