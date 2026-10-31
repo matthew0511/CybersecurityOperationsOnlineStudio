@@ -271,3 +271,22 @@ def test_database_rls_fails_closed_for_non_superuser(web):
             rows=db.execute('SELECT organization_id,title FROM pl_records').fetchall();assert len(rows)==1 and rows[0]['organization_id']==org
             with pytest.raises(psycopg.errors.InsufficientPrivilege):
                 with db.transaction():db.execute("INSERT INTO pl_records(id,organization_id,kind,title,created_by,updated_by) VALUES ('bad-scope',%s,'site','Denied','rls_viewer','rls_viewer')",(other,))
+
+
+def test_legacy_rollback_role_reads_archive_aware_tables(web):
+    import psycopg
+    from cyberstudio.web.database import grant_rollback_scope
+    org,_=setup(web)
+    call(web,'add_risk',org=org,title='Synthetic rollback record',description='',likelihood=2,impact=3,rationale='Regression fixture')
+    with connect() as db:
+        if not db.execute("SELECT 1 FROM pg_roles WHERE rolname='studioapp'").fetchone():db.execute('CREATE ROLE studioapp NOLOGIN NOBYPASSRLS')
+        db.execute('GRANT USAGE ON SCHEMA studio TO studioapp')
+        db.execute('GRANT SELECT ON risks,web_users,xp_memberships TO studioapp')
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            with db.transaction():
+                db.execute('SET LOCAL ROLE studioapp')
+                db.execute('SELECT count(*) FROM risks').fetchone()
+        grant_rollback_scope(db)
+        with db.transaction():
+            db.execute('SET LOCAL ROLE studioapp')
+            assert db.execute('SELECT count(*) AS n FROM risks').fetchone()['n']==1

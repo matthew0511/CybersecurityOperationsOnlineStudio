@@ -152,6 +152,12 @@ def migrate(raw):
         raw.execute('CREATE OR REPLACE TRIGGER web_audit_no_update BEFORE UPDATE OR DELETE ON web_request_audit FOR EACH ROW EXECUTE FUNCTION reject_history_change()')
 
 
+def grant_rollback_scope(raw):
+    """Retain legacy-image reads while its documented rollback role exists."""
+    if raw.execute("SELECT 1 FROM pg_roles WHERE rolname='studioapp'").fetchone():
+        raw.execute('GRANT SELECT ON studio.pl_trash TO studioapp')
+
+
 def main():
     from psycopg import sql
     with connect(admin=True) as raw:
@@ -164,6 +170,7 @@ def main():
             raw.execute(sql.SQL('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA studio TO {}').format(sql.Identifier(username)))
             raw.execute(sql.SQL('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA studio TO {}').format(sql.Identifier(username)))
             raw.execute(sql.SQL('REVOKE CREATE ON SCHEMA public FROM PUBLIC'))
+            grant_rollback_scope(raw)
     print('PostgreSQL schema migration and application role grants completed')
 
 
