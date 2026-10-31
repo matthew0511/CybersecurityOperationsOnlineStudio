@@ -1,4 +1,4 @@
-"""Authenticated browser/API service. Single-owner installation, multiple organizations."""
+"""Authenticated browser/API service with organization-scoped team roles."""
 from contextlib import contextmanager
 import hashlib
 import hmac
@@ -22,8 +22,32 @@ from fastapi.staticfiles import StaticFiles
 from cyberstudio.service import ValidationError, NotFoundError
 from cyberstudio.enterprise import EnterpriseGovernanceService
 from cyberstudio.web.database import connect, service
+from cyberstudio.web.experience import router as experience_router, authorize, require_owner, tick
+import threading
+from contextlib import asynccontextmanager
+import logging
 
-app = FastAPI(title='Cyber Security Operations Online Studio', docs_url=None, redoc_url=None, openapi_url=None)
+
+@asynccontextmanager
+async def lifespan(app):
+    stop = threading.Event()
+    def scheduled_work():
+        while not stop.is_set():
+            try:
+                with connect() as db, db.transaction():
+                    tick(db)
+            except Exception:
+                logging.getLogger(__name__).warning('Scheduled snapshot/reminder pass failed; retrying next minute')
+            stop.wait(60)
+    thread = None
+    if os.getenv('DB_HOST') and not os.getenv('TEST_DATABASE_URL'):
+        thread = threading.Thread(target=scheduled_work, daemon=True)
+        thread.start()
+    yield
+    stop.set()
+
+
+app = FastAPI(lifespan=lifespan, title='Cyber Security Operations Online Studio', docs_url=None, redoc_url=None, openapi_url=None)
 hasher = PasswordHasher()
 COOKIE = '__Host-studio'
 STATIC = Path(__file__).parent / 'static'
@@ -79,7 +103,7 @@ def limit(db, key):
 
 def principal(db, request, *, write=False):
     token = request.cookies.get(COOKIE, '')
-    row = db.execute('SELECT * FROM web_sessions WHERE token_hash=%s AND expires_at>%s', (digest(token), now())).fetchone()
+    row = db.execute('SELECT s.*,u.role FROM web_sessions s JOIN web_users u ON u.username=s.username WHERE s.token_hash=%s AND s.expires_at>%s AND u.enabled', (digest(token), now())).fetchone()
     if not row:
         raise HTTPException(401, 'Sign in required')
     if write and not hmac.compare_digest(request.headers.get('x-csrf-token', ''), row['csrf']):
@@ -132,7 +156,7 @@ def setup(body: dict, request: Request):
             username, password = str(body.get('username', '')).lower(), str(body.get('password', ''))
             if not re.fullmatch(r'[a-z0-9_.@-]{3,100}', username) or not 16 <= len(password) <= 256:
                 raise HTTPException(422, 'Use a valid username and a password of 16–256 characters')
-            db.execute('INSERT INTO web_users VALUES (%s,%s,%s)', (username, hasher.hash(password), now()))
+            db.execute("INSERT INTO web_users(username,password_hash,created_at,role) VALUES (%s,%s,%s,'owner')", (username, hasher.hash(password), now()))
     return {'status': 'Owner created. Sign in to continue.'}
 
 
@@ -145,7 +169,7 @@ def login(body: dict, request: Request):
         with db.transaction():
             limit(db, 'login:' + username)
         row = db.execute('SELECT * FROM web_users WHERE username=%s', (username,)).fetchone()
-        if not row or not verify_password(row['password_hash'], password):
+        if not row or not row['enabled'] or not verify_password(row['password_hash'], password):
             raise HTTPException(401, 'Invalid username or password')
         token, csrf = secrets.token_urlsafe(48), secrets.token_urlsafe(32)
         with db.transaction():
@@ -161,7 +185,7 @@ def login(body: dict, request: Request):
 def me(request: Request):
     with connect() as db:
         user = principal(db, request)
-        return {'username': user['username'], 'csrf': user['csrf']}
+        return {'username': user['username'], 'csrf': user['csrf'], 'role': user['role']}
 
 
 @app.post('/api/logout')
@@ -222,6 +246,12 @@ def call(operation: str, body: dict, request: Request):
                 raise HTTPException(422, name+' must be text')
             if isinstance(value,str) and len(value)>12000:
                 raise HTTPException(422, name+' is too long')
+        if operation=='create_organization':
+            require_owner(user)
+        elif arguments.get('org'):
+            authorize(db,user,arguments['org'],operation in WRITES,operation)
+        elif operation not in {'list_organizations','framework_catalogs','framework_controls'}:
+            require_owner(user)
         svc = service(db)
         if operation == 'record_risk_decision':
             row = db.execute('SELECT password_hash FROM web_users WHERE username=%s',(user['username'],)).fetchone()
@@ -229,7 +259,20 @@ def call(operation: str, body: dict, request: Request):
             arguments['operator_passphrase'] = 'authenticated-web-operator'
         try:
             with db.transaction():
+                if operation in {'save_questionnaire_response','answer_question'}:
+                    aid=arguments.get('assessment','')
+                    locked=db.execute("SELECT state FROM xp_assessments WHERE assessment_id=%s AND organization_id=%s",(aid,arguments.get('org',''))).fetchone()
+                    if locked and locked['state'] in {'submitted','approved'}:
+                        raise HTTPException(409,'Reopen this questionnaire before changing answers')
+                if operation=='update_task_status' and arguments.get('new_status')=='done':
+                    if db.execute("SELECT 1 FROM xp_dependencies d JOIN remediation_tasks t ON t.id=d.depends_on WHERE d.task_id=%s AND d.organization_id=%s AND t.status<>'done'",(arguments.get('tid',''),arguments.get('org',''))).fetchone():
+                        raise HTTPException(409,'Finish prerequisite tasks first')
                 result = getattr(svc, operation)(**arguments)
+                if operation=='list_organizations' and user['role']!='owner':
+                    allowed={r['organization_id'] for r in db.execute('SELECT organization_id FROM xp_memberships WHERE username=%s',(user['username'],)).fetchall()}
+                    result=[r for r in result if r['id'] in allowed]
+                if operation in {'save_questionnaire_response','answer_question'}:
+                    db.execute('INSERT INTO xp_response_versions(assessment_id,code,version) VALUES (%s,%s,1) ON CONFLICT(assessment_id,code) DO UPDATE SET version=xp_response_versions.version+1',(arguments['assessment'],arguments['code']))
                 if operation in WRITES:
                     db.execute('INSERT INTO web_request_audit(username,operation) VALUES (%s,%s)', (user['username'],operation))
         except (TypeError, ValueError) as exc:
@@ -256,6 +299,7 @@ async def upload(kind: str, request: Request):
         user = principal(db, request, write=True)
         svc = service(db)
         org = str(form.get('org',''))
+        authorize(db,user,org,True,'link_evidence' if kind=='evidence' else 'import')
         with db.transaction():
             if kind=='evidence':
                 result = svc.add_evidence(org,str(form.get('title','')),file.filename or 'evidence',content,file.content_type or 'application/octet-stream',str(form.get('expires_on','')))
@@ -276,7 +320,8 @@ async def upload(kind: str, request: Request):
 @app.get('/api/evidence/{org}/{eid}')
 def download_evidence(org: str, eid: str, request: Request):
     with connect() as db:
-        principal(db,request)
+        user=principal(db,request)
+        authorize(db,user,org)
         content=service(db).evidence_bytes(org,eid)
         return Response(content,media_type='application/octet-stream',headers={'Content-Disposition':'attachment; filename="evidence.bin"'})
 
@@ -288,7 +333,8 @@ def report(org: str, kind: str, extension: str, request: Request):
     if extension not in {'pdf','xlsx'} or kind not in {'executive','board'}:
         raise HTTPException(404,'Unknown report')
     with connect() as db:
-        principal(db,request)
+        user=principal(db,request)
+        authorize(db,user,org)
         svc=service(db)
         with tempfile.TemporaryDirectory() as folder:
             dest=Path(folder)/('report.'+extension)
@@ -300,6 +346,8 @@ def report(org: str, kind: str, extension: str, request: Request):
     mime='application/pdf' if extension=='pdf' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     return Response(data,media_type=mime,headers={'Content-Disposition':f'attachment; filename="{kind}.{extension}"'})
 
+
+app.include_router(experience_router)
 
 app.mount('/static', StaticFiles(directory=STATIC), name='static')
 
