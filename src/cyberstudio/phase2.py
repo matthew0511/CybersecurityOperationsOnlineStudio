@@ -15,6 +15,7 @@ import re
 import sqlite3
 from typing import Any
 
+from .questionnaires import THIRD_PARTY_TEMPLATE_ID, THIRD_PARTY_LABEL, THIRD_PARTY_QUESTIONS
 from .service import StudioService, _required, _rows, uid, utc_now, ValidationError, NotFoundError
 
 FRAMEWORKS = {
@@ -307,6 +308,21 @@ class Phase2Service(StudioService):
         return _rows(self.db.execute("SELECT q.code, l.framework_key,l.control_code,l.rationale FROM template_control_links l JOIN template_questions q ON q.id=l.template_question_id WHERE l.organization_id=? AND q.template_id=? ORDER BY q.sort_order",(org,template)))
 
     def create_assessment(self,org: str,title: str,scope: str = "",template_id: str | None = None) -> str:
+        if template_id == THIRD_PARTY_TEMPLATE_ID:
+            self._org(org)
+            title = _required(title, "Assessment title")
+            if len(scope) > 2000:
+                raise ValidationError("Assessment scope is too long")
+            aid, stamp = uid(), utc_now()
+            with self.vault.transaction() as conn:
+                conn.execute("INSERT INTO assessments VALUES(?,?,?,?,?,?,?,?)",
+                             (aid, org, title, scope, THIRD_PARTY_LABEL, "draft", stamp, stamp))
+                for code, prompt, domain in THIRD_PARTY_QUESTIONS:
+                    conn.execute("INSERT INTO assessment_questions VALUES(?,?,?,?,?,?,?,?,?)",
+                                 (uid(), org, aid, code, prompt, domain, "Unanswered", "", stamp))
+                self._audit(conn, org, "assessment", aid, "create_from_default",
+                            {"template": THIRD_PARTY_TEMPLATE_ID, "question_count": 60})
+            return aid
         if template_id is None:
             return super().create_assessment(org,title,scope)
         rec=self._template(org,template_id)
@@ -328,6 +344,16 @@ class Phase2Service(StudioService):
                 conn.execute("INSERT INTO assessment_control_links VALUES(?,?,?,?,?,?,?)",(uid(),org,aid,link['code'],link['framework_key'],link['control_code'],link['rationale']))
             self._audit(conn,org,"assessment",aid,"create_from_template",{"template_id":template_id,"version":rec['version']})
         return aid
+
+    def save_questionnaire_response(self, org: str, assessment: str, code: str, response: str) -> None:
+        """Store multiline narrative in rationale; Unknown means unscored, not a failed control."""
+        self._org(org)
+        self._exists("assessments", assessment, org)
+        record = self.db.execute("SELECT framework_label FROM assessments WHERE id=? AND organization_id=?",
+                                 (assessment, org)).fetchone()
+        if record["framework_label"] != THIRD_PARTY_LABEL:
+            raise ValidationError("Select a third-party default questionnaire")
+        self.answer_question(org, assessment, code, "Unknown" if response.strip() else "Unanswered", response)
 
     def assessment_mappings(self,org: str,assessment: str) -> list[dict[str,Any]]:
         self._org(org);self._exists("assessments",assessment,org)
