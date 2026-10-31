@@ -133,3 +133,15 @@ def test_import_preview_and_confirmation(web):
     response=web.post('/api/upload/preview',data={'org':org,'module':'risks'},files={'file':('risks.csv',payload,'text/csv')})
     assert response.status_code==200,response.text
     assert web.post('/api/upload/import',data={'org':org,'module':'risks'},files={'file':('risks.csv',payload,'text/csv')}).status_code==422
+
+
+def test_default_third_party_questionnaire_api(web):
+    login(web)
+    org=call(web,'create_organization',name='Synthetic Questionnaire')
+    assessment=call(web,'create_assessment',org=org,title='Third-party review',template_id='builtin:third-party-risk-v1')
+    questions=call(web,'questions',org=org,assessment=assessment)
+    assert len(questions)==60
+    call(web,'save_questionnaire_response',org=org,assessment=assessment,code='TPR-001',response='Example Supplier\nSecurity contact')
+    saved=call(web,'questions',org=org,assessment=assessment)[0]
+    assert saved['rationale']=='Example Supplier\nSecurity contact'
+    assert saved['answer']=='Unknown'
