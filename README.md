@@ -12,10 +12,10 @@ The browser service is deployed on AWS ECS Fargate with private PostgreSQL persi
 | Runtime stack | `cyber-ops-online-studio-web` deployed |
 | Application containers | Two private Fargate tasks; both ALB targets healthy |
 | Native database | RDS PostgreSQL, encrypted storage, verified TLS connections |
-| Automated regression and integration tests | 51 passed in AWS CodeBuild |
+| Automated regression and integration tests | 53 backend tests + 4 interface calculation tests passed in AWS CodeBuild |
 | Runtime container smoke test | Non-root, read-only root filesystem, dropped capabilities, PostgreSQL connection and temporary-volume write passed |
 | Live HTTPS acceptance test | PASS: setup/login, core record workflows, four reports, CSRF rejection and logout revocation |
-| ECR image scan | Completed with no findings for `online-20261031-v3` at validation time |
+| ECR image scan | Completed with no findings for `cosmetic-20261031-v2` at validation time |
 | Custom domain | Certificate requested; DNS ownership validation and mapping remain pending |
 
 ### First-time owner access
@@ -30,6 +30,10 @@ There are no default credentials. The validation owner was temporary and removed
 ### Default third-party risk questionnaire
 
 Assessments includes a **New third-party questionnaire** option containing all 60 owner-supplied questions with multiline responses and saved-response progress. It is also selectable in Create Assessment → Template Id. [Instructions and response semantics](docs/THIRD_PARTY_QUESTIONNAIRE.md). Existing assessments are unchanged.
+
+### Interface refresh
+
+The Studio now includes executive charts, grouped navigation, searchable and configurable tables, guided forms, record detail panels, framework progress cards, and branded PDF/Excel reports. [Changes and validation](docs/UI_REFRESH.md).
 
 ### Online capabilities
 

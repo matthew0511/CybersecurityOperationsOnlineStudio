@@ -15,6 +15,7 @@ phases:
     commands:
       - docker run --detach --name postgres-test --publish 127.0.0.1:5432:5432 --env POSTGRES_USER=studio_test --env POSTGRES_PASSWORD=synthetic-test-only --env POSTGRES_DB=studio_test postgres:18-alpine
       - timeout 90 sh -c 'until docker exec postgres-test pg_isready -U studio_test; do sleep 2; done'
+      - node --test tests/ui-core.test.cjs
       - PYTHONPATH=src TEST_DATABASE_URL=postgresql://studio_test:synthetic-test-only@127.0.0.1:5432/studio_test python -m pytest -q
       - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $REGISTRY
   build:
