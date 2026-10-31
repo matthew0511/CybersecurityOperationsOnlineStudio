@@ -27,6 +27,10 @@ The browser service is deployed on AWS ECS Fargate with private PostgreSQL persi
 
 There are no default credentials. The validation owner was temporary and removed after acceptance testing. Its synthetic organization is archived; immutable synthetic audit history is retained.
 
+### Default third-party risk questionnaire
+
+Assessments includes a **New third-party questionnaire** option containing all 60 owner-supplied questions with multiline responses and saved-response progress. It is also selectable in Create Assessment → Template Id. [Instructions and response semantics](docs/THIRD_PARTY_QUESTIONNAIRE.md). Existing assessments are unchanged.
+
 ### Online capabilities
 
 The browser workspace provides assessments and templates, risk/remediation and residual scores, framework activation and scoped implementation tracking, reference control evaluations, vendors, vulnerabilities, evidence upload/review, change management and CAB records, audits/findings, initiatives, board records, CSV preview/import, executive/board PDF and Excel reports, and domain audit history. An advanced action form exposes the supported public service operations.
