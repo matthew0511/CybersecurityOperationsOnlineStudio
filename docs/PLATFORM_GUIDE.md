@@ -231,3 +231,13 @@ IAM Policy Autopilot 0.4.0 analyzed the runtime and restore SDK calls. Optional 
 ## Validation boundaries
 
 Provider mocks validate request construction and error handling, not actual tenant consent or a successful customer sync. Automated accessibility checks do not establish full WCAG conformance. Restore verification checks restored schema and aggregate record counts; it does not measure a full customer recovery exercise.
+
+## Current release and infrastructure inputs
+
+See [PLATFORM_VALIDATION.md](PLATFORM_VALIDATION.md) for the deployed image, exact acceptance build, live checks, restore result, compatibility correction and activation requirements.
+
+The runtime template takes `SourceCommit` as an exact GitHub SHA and builds through `infra/experience-buildspec.yml`. Choose a new immutable image tag for each release and publish the tested image before updating the service. Inspect the change set and preserve the database migration/rollback ordering above. Updating `SourceCommit` changes the default builder source; it does not by itself publish or deploy an image.
+
+The operations template additionally takes the source database's subnet-group, option-group and parameter-group names. These are infrastructure metadata returned by DescribeDBInstances, not passwords. Restore authorization is limited to those exact groups plus the source database and the `studio-restore-*` target prefix. Keep the verifier task ARN current when a runtime task-definition replacement occurs. Run a real restore after changing executor permissions. The monthly rule is enabled only after the first verified execution; cron is the first day of the month at 04:00 UTC.
+
+Program Owner - Matthew Harris attribution remains independent of customer branding on the application, documentation and generated reports. Application settings cannot change it; source and deployment administrators retain control of the software.

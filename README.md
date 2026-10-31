@@ -1,5 +1,16 @@
 # Cyber Security Operations Online Studio
 
+## Online platform expansion
+
+The online Studio includes the fifty-enhancement program center, account security, app-integration adapters, frozen branded reports and scoped auditor workspaces. Open the authenticated [documentation subpage](https://cybersecurityoperationstudio.com/documentation) for workflows, field references, provider setup and operational guidance.
+
+- [Platform implementation and operations guide](docs/PLATFORM_GUIDE.md)
+- [Deployment and validation record](docs/PLATFORM_VALIDATION.md)
+- [Organization report branding](docs/REPORT_BRANDING.md)
+- [Program owner attribution](docs/PROGRAM_OWNER.md)
+
+Provider adapters remain disabled until the owner saves credentials, tests authentication and explicitly enables the connection. External alert delivery requires a confirmed recipient subscription. Program Owner - Matthew Harris attribution remains separate from client branding.
+
 The browser service is deployed on AWS ECS Fargate with private PostgreSQL persistence. The original desktop application remains in this repository.
 
 **Live HTTPS workspace:** https://cybersecurityoperationstudio.com/
