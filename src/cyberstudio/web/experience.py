@@ -279,9 +279,10 @@ def mutate(org:str,action:str,body:dict,request:Request):
             result=save_response(db,org,body.get('assessment',''),body,username)
         elif action=='review':
             aid=body.get('assessment','');state=meta(db,org,aid);decision=body.get('state');notes=text(body.get('notes',''))
-            if role!='owner' and state['reviewer']!=username:raise HTTPException(403,'Only the assigned reviewer or owner may review this questionnaire')
+            if decision!='submitted' and role!='owner' and state['reviewer']!=username:raise HTTPException(403,'Only the assigned reviewer or owner may review this questionnaire')
             if decision not in {'submitted','needs_changes','approved','draft'}:raise HTTPException(422,'Unsupported review state')
             if decision in {'submitted','approved'} and review_summary(db,org,aid)['unanswered']:raise HTTPException(422,'Complete the applicable questions first')
+            if decision=='submitted' and state['state'] not in {'draft','needs_changes'}:raise HTTPException(409,'Reopen before resubmitting')
             if decision=='approved' and state['state']!='submitted':raise HTTPException(409,'Submit before approving')
             if decision=='needs_changes' and not notes:raise HTTPException(422,'Explain the requested changes')
             db.execute('UPDATE xp_assessments SET state=%s,notes=%s,reviewed_by=%s,updated_at=CURRENT_TIMESTAMP WHERE assessment_id=%s',(decision,notes,username,aid))
@@ -492,10 +493,13 @@ def custom_report(org:str,format:str,body:dict,request:Request):
         target=io.BytesIO()
         if format=='pdf':
             from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Image
-            from reportlab.lib.styles import getSampleStyleSheet
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
             from reportlab.lib import colors
             from xml.sax.saxutils import escape
             styles=getSampleStyleSheet();story=[]
+            accent=colors.HexColor(payload['accent'])
+            ink=colors.black if (accent.red*.299+accent.green*.587+accent.blue*.114)>.6 else colors.white
+            header_style=ParagraphStyle('Branded table heading',parent=styles['BodyText'],textColor=ink)
             logo=db.execute('SELECT logo FROM xp_settings WHERE organization_id=%s',(org,)).fetchone()
             if logo and logo['logo']:
                 im=Image(io.BytesIO(bytes(logo['logo'])));im._restrictSize(160,65);story.append(im)
@@ -504,7 +508,7 @@ def custom_report(org:str,format:str,body:dict,request:Request):
             for key,items in payload['sections'].items():
                 story.append(Paragraph(key.title(),styles['Heading2']))
                 if not items:story.append(Paragraph('No records in the selected period.',styles['BodyText']));continue
-                columns=list(items[0]);data=[[Paragraph(escape(k.replace('_',' ').title()),styles['BodyText']) for k in columns]]
+                columns=list(items[0]);data=[[Paragraph(escape(k.replace('_',' ').title()),header_style) for k in columns]]
                 for r in items:data.append([Paragraph(escape(str(r.get(k,''))),styles['BodyText']) for k in columns])
                 table=Table(data,colWidths=[490/len(columns)]*len(columns),repeatRows=1);table.setStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor(payload['accent'])),('VALIGN',(0,0),(-1,-1),'TOP'),('GRID',(0,0),(-1,-1),.3,colors.lightgrey),('BOTTOMPADDING',(0,0),(-1,-1),8)])
                 story.append(table);story.append(Spacer(1,12))
