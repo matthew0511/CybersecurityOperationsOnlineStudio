@@ -20,13 +20,15 @@ The application clock records microsecond timestamps. PostgreSQL reads use creat
 
 ## Identity and access
 
-This release is a single-owner installation with multiple organization workspaces. It is not a tenant-separated SaaS or a multiuser RBAC system. The owner has access to all organizations in this installation.
+The installation owner has access to all organizations. Team accounts have explicit organization memberships with editor, reviewer, or viewer roles. Permission checks apply to original and new APIs, uploads, downloads and reports; sessions join active user state on every request. Removing a membership immediately removes organization access. This is application-level organization authorization, not independent database-per-tenant isolation.
 
 The initial owner must supply a one-time bootstrap code from the `cyber-ops-online-studio-dev/setup` secret and choose a username and password. A database advisory lock prevents simultaneous bootstrap claims. Bootstrap becomes unavailable as soon as an owner exists. Passwords are stored as Argon2id hashes. Sessions use random opaque tokens; only token hashes are stored in PostgreSQL. Cookies use the `__Host-` prefix, HTTPS-only, HttpOnly, SameSite=Strict, and an eight-hour expiry. Stateful API operations require a session-bound CSRF token. Login and setup attempts have shared PostgreSQL rate limits, independent of task count. API Gateway also throttles requests.
 
-The web service exposes an explicit allowlist of domain operations. Private methods and SQL interfaces are not accessible. Organization and related-record checks remain in the existing domain services. Risk acceptance requires owner password re-entry. Named reviewers in management records remain operator-entered assertions, not independently authenticated identities or electronic signatures.
+The web service exposes an explicit allowlist of domain operations. Private methods and SQL interfaces are not accessible. Organization and related-record checks remain in the existing domain services. Risk acceptance requires the authenticated operator's password re-entry and an authorized organization role. Named reviewers in management records remain operator-entered assertions, not independently authenticated identities or electronic signatures.
 
-MFA, federated sign-in, multiple user roles, account recovery, and session-management UI are not implemented. Do not represent this release as a complete enterprise identity service.
+MFA, federated sign-in, account recovery, and a general login-session management UI are not implemented. Do not represent this release as a complete enterprise identity service.
+
+The additive experience schema adds hashed, expiring one-use team/vendor invitations, scoped vendor sessions, authenticated immutable comments, response versions, questionnaire review metadata, evidence associations, record links, dependencies, per-user preferences, brand assets, immutable daily snapshots and deduplicated in-app notifications. The vendor session can access one questionnaire only; it cannot read internal evidence or organization APIs. See [Experience upgrade](EXPERIENCE_UPGRADE.md) for roles and lifecycle rules.
 
 ## Features and limits
 
@@ -40,13 +42,15 @@ Evidence uploads are limited to 5 MiB; the overall request cap is 7 MiB. Files a
 
 `infra/generate_runtime_template.py` generates `infra/web-stack.json`. The runtime stack creates private ingress, API Gateway, KMS-encrypted operational logs, a CodeBuild project, secrets, execution roles, task definitions, and a multi-region management-event CloudTrail trail with a private versioned S3 destination.
 
-CodeBuild reads a versioned source ZIP from a private encrypted bucket. It runs the desktop regression suite and HTTP/PostgreSQL integration tests against a disposable PostgreSQL container before building and pushing the image to ECR. The runtime image uses a non-root user, read-only root filesystem, ephemeral `/tmp` volume, and no desktop GUI dependency.
+CodeBuild normally reads a versioned source ZIP from a private encrypted bucket. Experience releases use an explicit GitHub source override with a resolved commit and `infra/experience-buildspec.yml`, which also runs browser acceptance tests. The S3 archive must be refreshed before it is reused for later builds. It runs the desktop regression suite and HTTP/PostgreSQL integration tests against a disposable PostgreSQL container before building and pushing the image to ECR. The runtime image uses a non-root user, read-only root filesystem, ephemeral `/tmp` volume, and no desktop GUI dependency.
 
 The migration task is separately authorized to retrieve the RDS master secret and application database secret. It creates native tables, the login role, and scoped schema grants. Runtime tasks retrieve only application credentials and the bootstrap code; their task IAM role has no application AWS policies. Never use the migration task definition as the normal application service.
 
 `DeployService=false` creates infrastructure without starting the web service. After a successful build and migration, updating it to `true` enables two Fargate tasks with rollback circuit breaker, minimum healthy percentage 100, maximum percentage 200, and ALB readiness checks on `/readyz`.
 
 The managed API Gateway HTTPS endpoint works independently of a custom domain. A custom domain needs an ACM-issued certificate, ownership-validation DNS records, an API domain mapping, and DNS alias/CNAME changes at the authoritative provider. A certificate request alone does not configure the domain.
+
+The web processes run an in-app background pass each minute. A PostgreSQL advisory lock coordinates replicas; snapshots and reminder keys are deduplicated. Reminders and mentions stay in the application; no external email or SMS is sent. Daily history starts on activation. Configurable report dates filter stored records and snapshots, while current summary counts remain clearly labeled.
 
 ## Verification and operations
 

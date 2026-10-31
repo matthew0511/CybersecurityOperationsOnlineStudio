@@ -37,11 +37,17 @@ Assessments includes a **New third-party questionnaire** option containing all 6
 
 The Studio now includes executive charts, grouped navigation, searchable and configurable tables, guided forms, record detail panels, framework progress cards, and branded PDF/Excel reports. [Changes and validation](docs/UI_REFRESH.md).
 
+### Experience and collaboration upgrade
+
+All twenty requested improvements are documented in [Experience upgrade](docs/EXPERIENCE_UPGRADE.md). Open **Workspace hub** for the action center, work board and dependency timeline, historical trends, report builder, branding/reminders, team invitations, and onboarding. Assessments now provides sectioned autosaving questionnaires with conditional follow-ups, linked evidence, reviewer assignments, and completion review. Header controls provide themes and organization search (Ctrl/Cmd K).
+
+Reminders and mentions are in-app. Invitation links are copied for secure sharing; no email/SMS provider is configured. Historical snapshots begin at activation and do not infer earlier exposure. Fixed Program Owner - Matthew Harris attribution is preserved independently of configurable organization branding.
+
 ### Online capabilities
 
 The browser workspace provides assessments and templates, risk/remediation and residual scores, framework activation and scoped implementation tracking, reference control evaluations, vendors, vulnerabilities, evidence upload/review, change management and CAB records, audits/findings, initiatives, board records, CSV preview/import, executive/board PDF and Excel reports, and domain audit history. An advanced action form exposes the supported public service operations.
 
-This release is **single-owner**, with access to all organizations in the installation. It does not implement multiuser RBAC, MFA/SSO, automated scanners, complete licensed framework catalogs, incident/BCDR automation, or compliance certification. Policies and incidents retain the original source version's imported-inventory behavior. Existing operator-entered reviewer names are not authenticated signatures. Independent security/privacy review and restore testing remain outstanding before sensitive production use.
+This release supports an installation owner plus organization-scoped **editor, reviewer, and viewer** accounts, and expiring vendor questionnaire invitations. It does not implement MFA/SSO, automated scanners, complete licensed framework catalogs, incident/BCDR automation, or compliance certification. Policies and incidents retain the original source version's imported-inventory behavior. Existing operator-entered reviewer names are not authenticated signatures. Independent security/privacy review and restore testing remain outstanding before sensitive production use.
 
 ### Engineering and operations
 

@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#112c3a"><title>Cyber Security Operations Online Studio</title><link rel="stylesheet" href="/static/style.css"><script src="/static/ui-core.js" defer></script><script src="/static/app.js" defer></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#112c3a"><title>Cyber Security Operations Online Studio</title><link rel="stylesheet" href="/static/style.css"><script src="/static/ui-core.js" defer></script><script src="/static/app.js" defer></script><script src="/static/experience.js" defer></script><link rel="stylesheet" href="/static/experience.css"></head>
 <body>
 <a class="skip-link" href="#main-content">Skip to workspace</a>
 <section id="auth" class="auth-wrap">
@@ -23,4 +23,5 @@
 <div id="notice" class="toast" role="status" hidden><span id="notice-text"></span><button id="close-notice" class="icon-button" aria-label="Dismiss notification">×</button></div>
 <dialog id="action-dialog" class="action-dialog"><form id="action-form"><div class="dialog-head"><div><p class="eyebrow">WORKSPACE ACTION</p><h2 id="action-title">Add a record</h2><p id="action-description" class="muted"></p></div><button type="button" id="close-dialog" class="icon-button" aria-label="Close action">×</button></div><label class="action-selector">Choose an action<select id="operation"></select></label><div id="fields" class="field-grid"></div><label id="reauth-wrap" hidden>Re-enter your password<input id="reauth-password" type="password" autocomplete="current-password"><small>Required to authorize this risk decision.</small></label><p id="action-error" class="form-error" role="alert"></p><div class="dialog-actions"><span class="muted">* Required information</span><button type="submit" id="save-action">Save record</button></div></form></dialog>
 <dialog id="detail-dialog" class="detail-drawer"><div class="dialog-head"><div><p class="eyebrow" id="detail-kicker">RECORD OVERVIEW</p><h2 id="detail-title">Record details</h2></div><button id="close-detail" class="icon-button" aria-label="Close record details">×</button></div><div id="detail-content"></div></dialog>
+<dialog id="xp-dialog" aria-label="Workspace action"></dialog>
 </body></html>
