@@ -513,7 +513,8 @@ def custom_report(org:str,format:str,body:dict,request:Request):
                 table=Table(data,colWidths=[490/len(columns)]*len(columns),repeatRows=1);table.setStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor(payload['accent'])),('VALIGN',(0,0),(-1,-1),'TOP'),('GRID',(0,0),(-1,-1),.3,colors.lightgrey),('BOTTOMPADDING',(0,0),(-1,-1),8)])
                 story.append(table);story.append(Spacer(1,12))
             story.append(Paragraph(escape(payload['footer'] or 'Management records; not an independent audit or certification.'),styles['BodyText']))
-            SimpleDocTemplate(target,title='Security Program Board Report').build(story)
+            from cyberstudio.report_style import pdf_page
+            SimpleDocTemplate(target,title='Security Program Board Report').build(story,onFirstPage=pdf_page,onLaterPages=pdf_page)
             mime='application/pdf'
         else:
             from openpyxl import Workbook
