@@ -1,0 +1,627 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Online Studio native service alarms and bounded monthly isolated restore validation",
+  "Parameters": {
+    "RestoreTaskArn": {
+      "Type": "String"
+    },
+    "MigrationExecutionRoleArn": {
+      "Type": "String"
+    },
+    "ApplicationTaskRoleArn": {
+      "Type": "String"
+    },
+    "LogKeyArn": {
+      "Type": "String"
+    },
+    "SourceDbId": {
+      "Type": "String"
+    },
+    "SourceDbHost": {
+      "Type": "String"
+    },
+    "AppSubnets": {
+      "Type": "String"
+    },
+    "TaskSecurityGroup": {
+      "Type": "String"
+    },
+    "ReleaseCommit": {
+      "Type": "String"
+    },
+    "AlertsArn": {
+      "Type": "String"
+    },
+    "LoadBalancerName": {
+      "Type": "String"
+    },
+    "TargetGroupName": {
+      "Type": "String"
+    }
+  },
+  "Resources": {
+    "RestoreLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/codebuild/cyber-ops-online-studio-restore",
+        "RetentionInDays": 30,
+        "KmsKeyId": {
+          "Ref": "LogKeyArn"
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "RestoreRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "codebuild.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "IsolatedRestoreOnly",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${RestoreLogs.Arn}:*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "rds:DescribeDBInstances"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:rds:${AWS::Region}:${AWS::AccountId}:db:${SourceDbId}"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:rds:${AWS::Region}:${AWS::AccountId}:db:studio-restore-*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "rds:RestoreDBInstanceToPointInTime"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:rds:${AWS::Region}:${AWS::AccountId}:db:${SourceDbId}"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:rds:${AWS::Region}:${AWS::AccountId}:db:studio-restore-*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "rds:AddTagsToResource"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:rds:${AWS::Region}:${AWS::AccountId}:db:studio-restore-*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "rds:DeleteDBInstance"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:rds:${AWS::Region}:${AWS::AccountId}:db:studio-restore-*"
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "aws:ResourceTag/Purpose": "restore-validation"
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecs:RunTask"
+                  ],
+                  "Resource": {
+                    "Ref": "RestoreTaskArn"
+                  },
+                  "Condition": {
+                    "ArnEquals": {
+                      "ecs:cluster": {
+                        "Fn::Sub": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:cluster/cyber-ops-online-studio-dev"
+                      }
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecs:DescribeTasks"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:ecs:${AWS::Region}:${AWS::AccountId}:task/cyber-ops-online-studio-dev/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "iam:PassRole"
+                  ],
+                  "Resource": [
+                    {
+                      "Ref": "MigrationExecutionRoleArn"
+                    },
+                    {
+                      "Ref": "ApplicationTaskRoleArn"
+                    }
+                  ],
+                  "Condition": {
+                    "StringEquals": {
+                      "iam:PassedToService": "ecs-tasks.amazonaws.com"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "RestoreProject": {
+      "Type": "AWS::CodeBuild::Project",
+      "Properties": {
+        "Name": "cyber-ops-online-studio-restore",
+        "ServiceRole": {
+          "Fn::GetAtt": [
+            "RestoreRole",
+            "Arn"
+          ]
+        },
+        "TimeoutInMinutes": 60,
+        "QueuedTimeoutInMinutes": 15,
+        "ConcurrentBuildLimit": 1,
+        "Source": {
+          "Type": "GITHUB",
+          "Location": "https://github.com/matthew0511/CybersecurityOperationsOnlineStudio.git",
+          "BuildSpec": "version: 0.2\nphases:\n  install:\n    commands:\n      - python -m pip install boto3\n  build:\n    commands:\n      - python scripts/restore_validation.py\n"
+        },
+        "SourceVersion": {
+          "Ref": "ReleaseCommit"
+        },
+        "Artifacts": {
+          "Type": "NO_ARTIFACTS"
+        },
+        "Environment": {
+          "Type": "LINUX_CONTAINER",
+          "ComputeType": "BUILD_GENERAL1_SMALL",
+          "Image": "aws/codebuild/standard:7.0",
+          "PrivilegedMode": false,
+          "EnvironmentVariables": [
+            {
+              "Name": "SOURCE_DB_ID",
+              "Value": {
+                "Ref": "SourceDbId"
+              }
+            },
+            {
+              "Name": "SOURCE_DB_HOST",
+              "Value": {
+                "Ref": "SourceDbHost"
+              }
+            },
+            {
+              "Name": "ECS_CLUSTER",
+              "Value": "cyber-ops-online-studio-dev"
+            },
+            {
+              "Name": "RESTORE_TASK",
+              "Value": {
+                "Ref": "RestoreTaskArn"
+              }
+            },
+            {
+              "Name": "APP_SUBNETS",
+              "Value": {
+                "Ref": "AppSubnets"
+              }
+            },
+            {
+              "Name": "TASK_SECURITY_GROUP",
+              "Value": {
+                "Ref": "TaskSecurityGroup"
+              }
+            }
+          ]
+        },
+        "LogsConfig": {
+          "CloudWatchLogs": {
+            "Status": "ENABLED",
+            "GroupName": {
+              "Ref": "RestoreLogs"
+            },
+            "StreamName": "restore"
+          }
+        }
+      }
+    },
+    "ScheduleRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "events.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "StartOnlyRestoreProject",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "codebuild:StartBuild"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "RestoreProject",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "RestoreSchedule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "Description": "Monthly isolated PITR restore and read-only verification; never directs production traffic",
+        "ScheduleExpression": "cron(0 4 1 * ? *)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Id": "Restore",
+            "Arn": {
+              "Fn::GetAtt": [
+                "RestoreProject",
+                "Arn"
+              ]
+            },
+            "RoleArn": {
+              "Fn::GetAtt": [
+                "ScheduleRole",
+                "Arn"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "RestoreFailureRule": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "EventPattern": {
+          "source": [
+            "aws.codebuild"
+          ],
+          "detail-type": [
+            "CodeBuild Build State Change"
+          ],
+          "detail": {
+            "project-name": [
+              "cyber-ops-online-studio-restore"
+            ],
+            "build-status": [
+              "FAILED",
+              "FAULT",
+              "TIMED_OUT"
+            ]
+          }
+        },
+        "Targets": [
+          {
+            "Id": "OperationsAlert",
+            "Arn": {
+              "Ref": "AlertsArn"
+            }
+          }
+        ]
+      }
+    },
+    "ServiceCPU": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": "studio-ServiceCPU",
+        "AlarmDescription": "Online Studio operational check. Configure and confirm SNS subscribers for external delivery.",
+        "Namespace": "AWS/ECS",
+        "MetricName": "CPUUtilization",
+        "Dimensions": [
+          {
+            "Name": "ClusterName",
+            "Value": "cyber-ops-online-studio-dev"
+          },
+          {
+            "Name": "ServiceName",
+            "Value": "cyber-ops-online-studio-web"
+          }
+        ],
+        "Statistic": "Average",
+        "Period": 60,
+        "EvaluationPeriods": 3,
+        "DatapointsToAlarm": 2,
+        "Threshold": 85,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "AlertsArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "AlertsArn"
+          }
+        ]
+      }
+    },
+    "ServiceMemory": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": "studio-ServiceMemory",
+        "AlarmDescription": "Online Studio operational check. Configure and confirm SNS subscribers for external delivery.",
+        "Namespace": "AWS/ECS",
+        "MetricName": "MemoryUtilization",
+        "Dimensions": [
+          {
+            "Name": "ClusterName",
+            "Value": "cyber-ops-online-studio-dev"
+          },
+          {
+            "Name": "ServiceName",
+            "Value": "cyber-ops-online-studio-web"
+          }
+        ],
+        "Statistic": "Average",
+        "Period": 60,
+        "EvaluationPeriods": 3,
+        "DatapointsToAlarm": 2,
+        "Threshold": 85,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "AlertsArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "AlertsArn"
+          }
+        ]
+      }
+    },
+    "UnhealthyTargets": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": "studio-UnhealthyTargets",
+        "AlarmDescription": "Online Studio operational check. Configure and confirm SNS subscribers for external delivery.",
+        "Namespace": "AWS/ApplicationELB",
+        "MetricName": "UnHealthyHostCount",
+        "Dimensions": [
+          {
+            "Name": "LoadBalancer",
+            "Value": {
+              "Ref": "LoadBalancerName"
+            }
+          },
+          {
+            "Name": "TargetGroup",
+            "Value": {
+              "Ref": "TargetGroupName"
+            }
+          }
+        ],
+        "Statistic": "Maximum",
+        "Period": 60,
+        "EvaluationPeriods": 3,
+        "DatapointsToAlarm": 2,
+        "Threshold": 0,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "AlertsArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "AlertsArn"
+          }
+        ]
+      }
+    },
+    "NoHealthyTargets": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": "studio-NoHealthyTargets",
+        "AlarmDescription": "Online Studio operational check. Configure and confirm SNS subscribers for external delivery.",
+        "Namespace": "AWS/ApplicationELB",
+        "MetricName": "HealthyHostCount",
+        "Dimensions": [
+          {
+            "Name": "LoadBalancer",
+            "Value": {
+              "Ref": "LoadBalancerName"
+            }
+          },
+          {
+            "Name": "TargetGroup",
+            "Value": {
+              "Ref": "TargetGroupName"
+            }
+          }
+        ],
+        "Statistic": "Minimum",
+        "Period": 60,
+        "EvaluationPeriods": 3,
+        "DatapointsToAlarm": 2,
+        "Threshold": 1,
+        "ComparisonOperator": "LessThanThreshold",
+        "TreatMissingData": "breaching",
+        "AlarmActions": [
+          {
+            "Ref": "AlertsArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "AlertsArn"
+          }
+        ]
+      }
+    },
+    "TargetErrors": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": "studio-TargetErrors",
+        "AlarmDescription": "Online Studio operational check. Configure and confirm SNS subscribers for external delivery.",
+        "Namespace": "AWS/ApplicationELB",
+        "MetricName": "HTTPCode_Target_5XX_Count",
+        "Dimensions": [
+          {
+            "Name": "LoadBalancer",
+            "Value": {
+              "Ref": "LoadBalancerName"
+            }
+          },
+          {
+            "Name": "TargetGroup",
+            "Value": {
+              "Ref": "TargetGroupName"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 60,
+        "EvaluationPeriods": 3,
+        "DatapointsToAlarm": 2,
+        "Threshold": 5,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "AlertsArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "AlertsArn"
+          }
+        ]
+      }
+    },
+    "DatabaseCPU": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": "studio-DatabaseCPU",
+        "AlarmDescription": "Online Studio operational check. Configure and confirm SNS subscribers for external delivery.",
+        "Namespace": "AWS/RDS",
+        "MetricName": "CPUUtilization",
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": {
+              "Ref": "SourceDbId"
+            }
+          }
+        ],
+        "Statistic": "Average",
+        "Period": 60,
+        "EvaluationPeriods": 3,
+        "DatapointsToAlarm": 2,
+        "Threshold": 85,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "AlertsArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "AlertsArn"
+          }
+        ]
+      }
+    },
+    "DatabaseStorage": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmName": "studio-DatabaseStorage",
+        "AlarmDescription": "Online Studio operational check. Configure and confirm SNS subscribers for external delivery.",
+        "Namespace": "AWS/RDS",
+        "MetricName": "FreeStorageSpace",
+        "Dimensions": [
+          {
+            "Name": "DBInstanceIdentifier",
+            "Value": {
+              "Ref": "SourceDbId"
+            }
+          }
+        ],
+        "Statistic": "Minimum",
+        "Period": 60,
+        "EvaluationPeriods": 3,
+        "DatapointsToAlarm": 2,
+        "Threshold": 5368709120,
+        "ComparisonOperator": "LessThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "AlertsArn"
+          }
+        ],
+        "OKActions": [
+          {
+            "Ref": "AlertsArn"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "RestoreProject": {
+      "Value": {
+        "Ref": "RestoreProject"
+      }
+    }
+  }
+}

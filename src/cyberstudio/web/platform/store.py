@@ -23,8 +23,9 @@ def access(db,user,org,write=False,capability='records:write'):
         if row and (capability in row['denied'] or '*' in row['denied']):fail('This capability is restricted for your account',403)
     return role
 
-def get(db,org,ident,kind=None,deleted=False):
-    row=db.execute('SELECT * FROM pl_records WHERE organization_id=%s AND id=%s AND (%s OR deleted_at IS NULL)',(org,ident,deleted)).fetchone()
+def get(db,org,ident,kind=None,deleted=False,lock=False):
+    query='SELECT * FROM pl_records WHERE organization_id=%s AND id=%s AND (%s OR deleted_at IS NULL) FOR UPDATE' if lock else 'SELECT * FROM pl_records WHERE organization_id=%s AND id=%s AND (%s OR deleted_at IS NULL)'
+    row=db.execute(query,(org,ident,deleted)).fetchone()
     if not row or kind and row['kind']!=kind:fail('Record not found in this organization',404)
     return dict(row)
 
@@ -134,8 +135,8 @@ def history(db,org,ident,username,action,snapshot):
 
 def save(db,user,org,kind,body):
     access(db,user,org,True)
-    ident=body.get('id') or uid();previous=get(db,org,ident,kind) if body.get('id') else None
-    if previous and previous['status'] in {'approved','submitted'} and kind in APPROVAL_KINDS:fail('Reopen the reviewed version before editing',409)
+    ident=body.get('id') or uid();previous=get(db,org,ident,kind,lock=True) if body.get('id') else None
+    if previous and previous['status'] not in {'draft','in_progress'} and kind in APPROVAL_KINDS:fail('Reopen the reviewed version before editing',409)
     if previous and body.get('version')!=previous['version']:fail('This record changed. Reload and reconcile your edit.',409)
     title=bounded(body.get('title',''),300)
     if not title:fail('Enter a record title')
@@ -161,7 +162,7 @@ def save(db,user,org,kind,body):
 
 def transition(db,user,org,ident,body):
     access(db,user,org,True,'records:approve' if body.get('status') in {'approved','rejected'} else 'records:write')
-    record=get(db,org,ident)
+    record=get(db,org,ident,lock=True)
     if body.get('version')!=record['version']:fail('Record changed; reload before changing its status',409)
     status=body.get('status');old=record['status']
     if status not in STATUSES:fail('Choose a valid status')

@@ -17,6 +17,7 @@ if(p==='/api/platform/catalog')return json(platformCatalog);
 if(p==='/api/platform/documentation')return json(platformCatalog.docs);
 if(p==='/api/security')return json({username:'owner',role:'owner',mfa_enabled:false,security_key_ready:true,sessions:[],entra_configured:false});
 if(p==='/api/platform/'+org+'/overview')return json({counts:[],executions:[],quarantine:[],editions:[],role:'owner'});
+if(p==='/api/platform/'+org+'/integrations')return json({providers:platformCatalog.providers,connections:[],jobs:[]});
 if(p.startsWith('/api/platform/')&&(p.includes('/records/')||p.includes('/choices/')||p.endsWith('/integrations')||p.endsWith('/jobs')))return json([]);
 if(p==='/api/me')return json({username:'owner',csrf:'test',role:'owner'});
 if(p==='/api/operations')return json({create_assessment:{write:true,fields:[{name:'org',required:true,kind:'string'},{name:'title',required:true,kind:'string'},{name:'scope',required:false,kind:'string',default:''},{name:'template_id',required:false,kind:'string',default:null}]}});

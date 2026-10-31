@@ -157,5 +157,5 @@ def stage(db,row,items):
         data=json.dumps(item,default=str)
         if len(data)>100000:continue
         digest=hashlib.sha256(data.encode()).hexdigest()
-        db.execute('INSERT INTO pl_external(organization_id,integration_id,external_id,payload,source_hash) VALUES (%s,%s,%s,%s::jsonb,%s) ON CONFLICT(organization_id,integration_id,external_id) DO UPDATE SET payload=EXCLUDED.payload,source_hash=EXCLUDED.source_hash,updated_at=CURRENT_TIMESTAMP',(row['organization_id'],row['id'],ext,data,digest));staged+=1
+        db.execute('INSERT INTO pl_external(organization_id,integration_id,external_id,payload,source_hash) VALUES (%s,%s,%s,%s::jsonb,%s) ON CONFLICT(organization_id,integration_id,external_id) DO UPDATE SET payload=EXCLUDED.payload,promoted_id=CASE WHEN pl_external.source_hash=EXCLUDED.source_hash THEN pl_external.promoted_id ELSE NULL END,source_hash=EXCLUDED.source_hash,updated_at=CURRENT_TIMESTAMP',(row['organization_id'],row['id'],ext,data,digest));staged+=1
     return staged
