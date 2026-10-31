@@ -9,13 +9,15 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet
 from .reports import _safe_excel
+from functools import partial
+from .report_branding import for_report
 from .report_style import pdf_styles, pdf_table_style, pdf_page, style_workbook
 
 DISCLAIMER="Local operator-entered records. Reviewer names are not authenticated electronic signatures. Not a certification or independent audit."
 
 def board_packet(service,org,path):
     path=Path(path)
-    snap=service.board_snapshot(org)
+    snap=service.board_snapshot(org);brand=for_report(service,org)
     m=snap["governance"];e=snap["enterprise"]
     cards=[
         ("Active frameworks",snap["frameworks_enabled"]),
@@ -47,24 +49,24 @@ def board_packet(service,org,path):
             for obj in items:ws.append([_safe_excel(str(obj.get(f,""))) for f in fields])
             ws.freeze_panes="A2";ws.auto_filter.ref=ws.dimensions
             for col in "ABCDEFG":ws.column_dimensions[col].width=28
-        style_workbook(wb,summary_header=2)
+        style_workbook(wb,summary_header=2,brand=brand)
         sheet.row_dimensions[sheet.max_row].height=64
         wb.save(path)
     elif path.suffix.lower()==".pdf":
-        styles=pdf_styles()
-        story=[Paragraph("Cybersecurity Governance | Board Packet",styles["Title"]),
+        styles=pdf_styles(brand)
+        story=[Paragraph(escape(brand["display_name"]),styles["Title"]), Paragraph("Governance | Board Packet",styles["Heading2"]),
                Paragraph("As of: "+escape(snap["as_of"]),styles["Normal"]),
                Spacer(1,16)]
         grid=[["Governance metric","Current value"]]+[[str(a),str(b)] for a,b in cards]
         t=Table(grid,colWidths=[310,175],repeatRows=1)
-        t.setStyle(pdf_table_style())
+        t.setStyle(pdf_table_style(brand))
         story.extend([t,Spacer(1,18),Paragraph("Priority audit findings",styles["Heading2"])])
         for f in service.findings(org):
             if f["severity"] in {"high","critical"} and f["status"] not in {"closed","accepted"}:
                 story.append(Paragraph(escape(f["severity"].upper()+" | "+f["title"]+" | "+f["owner"]),styles["BodyText"]))
         story.extend([Spacer(1,18),Paragraph("Management caveat",styles["Heading2"]),
                       Paragraph(DISCLAIMER,styles["BodyText"])])
-        SimpleDocTemplate(str(path),pagesize=letter,leftMargin=46,rightMargin=46,topMargin=58,bottomMargin=52,title="Governance Board Packet").build(story,onFirstPage=pdf_page,onLaterPages=pdf_page)
+        SimpleDocTemplate(str(path),pagesize=letter,leftMargin=46,rightMargin=46,topMargin=112,bottomMargin=64,title="Governance Board Packet").build(story,onFirstPage=partial(pdf_page,brand=brand),onLaterPages=partial(pdf_page,brand=brand))
     else:
         raise ValueError("Board report requires .pdf or .xlsx")
     return path

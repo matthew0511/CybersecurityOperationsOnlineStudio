@@ -16,6 +16,8 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 
 from .phase3 import Phase3Service
 from .reports import _safe_excel
+from functools import partial
+from .report_branding import for_report
 from .report_style import pdf_styles, pdf_table_style, pdf_page, style_workbook
 
 DISCLAIMER = ('Operator-entered and imported records only. Framework mappings and manual reviewer '
@@ -29,7 +31,7 @@ def _safe_cell(v: object) -> object:
 
 def export_executive_xlsx(svc: Phase3Service, org: str, destination: Path) -> Path:
     record=svc.organization(org)
-    m=svc.executive_metrics(org)
+    m=svc.executive_metrics(org);brand=for_report(svc,org)
     wb=Workbook();summary=wb.active;summary.title='Executive Overview'
     for row in [ ['Cyber Security Operations Online Studio — Executive snapshot'],
                  ['Organization',_safe_cell(record['name'])],
@@ -74,15 +76,15 @@ def export_executive_xlsx(svc: Phase3Service, org: str, destination: Path) -> Pa
             ws.column_dimensions[col_letter].width=min(58,max(16,max(len(str(c.value or '')) for c in column[:80])+2))
             for cell in column:cell.alignment=Alignment(vertical='top',wrap_text=True)
     destination=Path(destination)
-    style_workbook(wb,summary_header=5)
+    style_workbook(wb,summary_header=5,brand=brand)
     wb.save(destination)
     return destination
 
 
 def export_executive_pdf(svc: Phase3Service,org: str,destination: Path) -> Path:
-    record=svc.organization(org); m=svc.executive_metrics(org)
-    styles=pdf_styles()
-    story=[Paragraph('Cyber Security Operations Online Studio',styles['Title']),
+    record=svc.organization(org); m=svc.executive_metrics(org);brand=for_report(svc,org)
+    styles=pdf_styles(brand)
+    story=[Paragraph(escape(brand['display_name']),styles['Title']),
            Paragraph('Executive operations snapshot',styles['Heading2']),
            Paragraph('Organization: '+escape(record['name']),styles['Normal']),
            Paragraph('Generated UTC: '+datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M'),styles['Normal']),
@@ -98,7 +100,7 @@ def export_executive_pdf(svc: Phase3Service,org: str,destination: Path) -> Path:
         ('Overdue vulnerabilities','vulnerabilities_overdue'),('Overdue remediation','remediation_overdue')]
     rows=[['Indicator','Count']]+[[label,str(m[key])] for label,key in metric_labels]
     t=Table(rows,colWidths=[380,80],repeatRows=1,hAlign='LEFT')
-    t.setStyle(pdf_table_style())
+    t.setStyle(pdf_table_style(brand))
     story += [t,Spacer(1,15),Paragraph('Highest-rated inherent risks (up to 10)',styles['Heading2'])]
     risks=svc.list_risks(org)[:10]
     if not risks:story.append(Paragraph('No risk records entered.',styles['Normal']))
@@ -113,6 +115,6 @@ def export_executive_pdf(svc: Phase3Service,org: str,destination: Path) -> Path:
                   'their denominator is not the full set of framework requirements. Passing evaluations '
                   'are operator-reported, even where an evidence review exists. Missing evidence and '
                   'expired reviews need follow-up. The source data may be incomplete.',styles['BodyText'])]
-    doc=SimpleDocTemplate(str(destination),pagesize=letter,leftMargin=46,rightMargin=46,topMargin=58,bottomMargin=52)
-    doc.build(story,onFirstPage=pdf_page,onLaterPages=pdf_page)
+    doc=SimpleDocTemplate(str(destination),pagesize=letter,leftMargin=46,rightMargin=46,topMargin=112,bottomMargin=64)
+    doc.build(story,onFirstPage=partial(pdf_page,brand=brand),onLaterPages=partial(pdf_page,brand=brand))
     return Path(destination)

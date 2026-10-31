@@ -8,6 +8,7 @@ from hashlib import sha256
 from pathlib import Path
 import json
 from .governance import GovernanceService
+from .report_branding import ReportBrandingMixin, SCHEMA as BRANDING_SCHEMA
 from .service import ValidationError, NotFoundError, _required, _rows, uid, utc_now
 
 SCHEMA = """
@@ -48,10 +49,10 @@ CREATE TRIGGER IF NOT EXISTS custody_no_delete BEFORE DELETE ON enterprise_evide
  BEGIN SELECT RAISE(ABORT,'evidence custody history is immutable'); END;
 """
 
-class EnterpriseGovernanceService(GovernanceService):
+class EnterpriseGovernanceService(ReportBrandingMixin, GovernanceService):
     def __init__(self,vault):
         super().__init__(vault)
-        self.db.executescript(SCHEMA)
+        self.db.executescript(SCHEMA + ('' if hasattr(self.vault,'raw') else BRANDING_SCHEMA))
         self.vault._persist()
 
     def approval_policy(self,org):

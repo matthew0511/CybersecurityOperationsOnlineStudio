@@ -145,3 +145,32 @@ def test_default_third_party_questionnaire_api(web):
     saved=call(web,'questions',org=org,assessment=assessment)[0]
     assert saved['rationale']=='Example Supplier\nSecurity contact'
     assert saved['answer']=='Unknown'
+
+
+def test_authenticated_report_branding_upload_and_reports(web):
+    from io import BytesIO
+    from PIL import Image
+    assert web.get('/api/report-branding/missing').status_code==401
+    login(web)
+    org=call(web,'create_organization',name='Synthetic Branded Organization')
+    other=call(web,'create_organization',name='Separate Branding')
+    profile={'display_name':'Example Dental','tagline':'Security oversight','primary_color':'#234567','accent_color':'#008080','footer_note':'Confidential'}
+    image=BytesIO();Image.new('RGB',(500,120),'teal').save(image,format='PNG')
+    url='/api/report-branding/'+org
+    token=web.headers.pop('x-csrf-token')
+    assert web.post(url,data=profile).status_code==403
+    web.headers['x-csrf-token']=token
+    response=web.post(url,data=profile,files={'logo':('logo.png',image.getvalue(),'image/png')})
+    assert response.status_code==200,response.text
+    assert response.json()['has_logo'] is True
+    assert web.get(url+'/logo').headers['content-type']=='image/png'
+    assert web.get('/api/report-branding/'+other).json()['has_logo'] is False
+    assert web.get('/api/report-branding/missing').status_code==404
+    assert web.post(url,data=profile,files={'logo':('bad.svg',b'<svg/>','image/svg+xml')}).status_code==422
+    assert web.get(url).json()['display_name']=='Example Dental'
+    for kind in ('executive','board'):
+        for extension in ('pdf','xlsx'):
+            result=web.get(f'/api/report/{org}/{kind}/{extension}')
+            assert result.status_code==200,result.text
+    assert web.post(url,data={**profile,'remove_logo':'true'}).status_code==200
+    assert web.get(url+'/logo').status_code==404

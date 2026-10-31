@@ -326,6 +326,50 @@ def download_evidence(org: str, eid: str, request: Request):
         return Response(content,media_type='application/octet-stream',headers={'Content-Disposition':'attachment; filename="evidence.bin"'})
 
 
+@app.get('/api/report-branding/{org}')
+def report_branding(org: str, request: Request):
+    with connect() as db:
+        user=principal(db,request)
+        authorize(db,user,org)
+        brand=service(db).report_branding(org)
+        return {**{k:v for k,v in brand.items() if k!='logo'},'has_logo':bool(brand['logo']),'can_edit':user['role']=='owner'}
+
+
+@app.get('/api/report-branding/{org}/logo')
+def report_logo(org: str, request: Request):
+    with connect() as db:
+        user=principal(db,request)
+        authorize(db,user,org)
+        content=service(db).report_branding(org)['logo']
+        if not content:raise HTTPException(404,'No report logo uploaded')
+        return Response(content,media_type='image/png')
+
+
+@app.post('/api/report-branding/{org}')
+async def save_report_branding(org: str, request: Request):
+    # Authenticate before accepting multipart uploads; the global body limit also applies.
+    with connect() as db:
+        user=principal(db,request,write=True)
+        authorize(db,user,org,True)
+        require_owner(user)
+        raw=await request.body()
+        if len(raw)>3*1024*1024:raise HTTPException(413,'Branding upload exceeds 3 MiB')
+        form=await request.form(max_files=1,max_fields=8,max_part_size=2*1024*1024)
+        if set(form)-{'display_name','tagline','primary_color','accent_color','footer_note','logo','remove_logo'}:
+            raise HTTPException(422,'Unsupported branding field')
+        file=form.get('logo');content=None
+        if file and hasattr(file,'read') and file.filename:
+            content=await file.read(2*1024*1024+1)
+            if len(content)>2*1024*1024:raise HTTPException(413,'Logo exceeds 2 MiB')
+        with db.transaction():
+            result=service(db).save_report_branding(org,
+                str(form.get('display_name','')),str(form.get('tagline','')),
+                str(form.get('primary_color','')),str(form.get('accent_color','')),
+                str(form.get('footer_note','')),logo=content,remove_logo=form.get('remove_logo')=='true')
+            db.execute('INSERT INTO web_request_audit(username,operation) VALUES (%s,%s)',(user['username'],'report_branding:update'))
+        return {'status':'saved',**result,'has_logo':bool(service(db).report_branding(org)['logo'])}
+
+
 @app.get('/api/report/{org}/{kind}/{extension}')
 def report(org: str, kind: str, extension: str, request: Request):
     from cyberstudio.reports_phase3 import export_executive_pdf, export_executive_xlsx

@@ -359,17 +359,12 @@ def invitations(org:str,request:Request):
 
 @router.post('/api/experience/{org}/branding/logo')
 async def logo_upload(org:str,request:Request):
-    payload=await request.body();mime=request.headers.get('content-type','')
-    if len(payload)>200000 or not ((mime=='image/png' and payload.startswith(b'\x89PNG\r\n\x1a\n')) or (mime=='image/jpeg' and payload.startswith(b'\xff\xd8\xff'))):raise HTTPException(422,'Choose a PNG or JPEG up to 200 KB')
-    # Decode and constrain dimensions to reject malformed files and decompression bombs.
-    from PIL import Image
-    try:
-        image=Image.open(io.BytesIO(payload));image.verify()
-        if image.width>2000 or image.height>2000:raise ValueError()
-    except Exception:raise HTTPException(422,'Logo must be a valid image no larger than 2000×2000') from None
+    from cyberstudio.report_branding import normalize_logo
     with connect() as db,db.transaction():
         u=session(db,request,True);authorize(db,u,org,True);require_owner(u)
-        db.execute('INSERT INTO xp_settings(organization_id,logo,logo_mime) VALUES (%s,%s,%s) ON CONFLICT(organization_id) DO UPDATE SET logo=EXCLUDED.logo,logo_mime=EXCLUDED.logo_mime',(org,payload,mime));audit(db,u['username'],'logo')
+        payload=await request.body()
+        payload=normalize_logo(payload)
+        db.execute("INSERT INTO xp_settings(organization_id,logo,logo_mime) VALUES (%s,%s,'image/png') ON CONFLICT(organization_id) DO UPDATE SET logo=EXCLUDED.logo,logo_mime=EXCLUDED.logo_mime",(org,payload));audit(db,u['username'],'logo')
     return {'saved':True}
 
 
@@ -488,6 +483,7 @@ def custom_report(org:str,format:str,body:dict,request:Request):
     with connect() as db:
         u=session(db,request,True);authorize(db,u,org)
         payload=report_payload(db,org,body)
+        brand=service(db).report_branding(org)
         if format=='preview':return payload
         if format not in {'pdf','xlsx'}:raise HTTPException(404,'Unsupported format')
         target=io.BytesIO()
@@ -500,9 +496,6 @@ def custom_report(org:str,format:str,body:dict,request:Request):
             accent=colors.HexColor(payload['accent'])
             ink=colors.black if (accent.red*.299+accent.green*.587+accent.blue*.114)>.6 else colors.white
             header_style=ParagraphStyle('Branded table heading',parent=styles['BodyText'],textColor=ink)
-            logo=db.execute('SELECT logo FROM xp_settings WHERE organization_id=%s',(org,)).fetchone()
-            if logo and logo['logo']:
-                im=Image(io.BytesIO(bytes(logo['logo'])));im._restrictSize(160,65);story.append(im)
             story.extend([Paragraph(escape(payload['brand'] or payload['organization']),styles['Title']),Paragraph('Security Program | Board Report',styles['Heading1']),Paragraph(escape(payload['period_note']),styles['BodyText']),Spacer(1,12)])
             if payload['commentary']:story.extend([Paragraph('Management commentary',styles['Heading2']),Paragraph(escape(payload['commentary']).replace('\n','<br/>'),styles['BodyText'])])
             for key,items in payload['sections'].items():
@@ -513,8 +506,9 @@ def custom_report(org:str,format:str,body:dict,request:Request):
                 table=Table(data,colWidths=[490/len(columns)]*len(columns),repeatRows=1);table.setStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor(payload['accent'])),('VALIGN',(0,0),(-1,-1),'TOP'),('GRID',(0,0),(-1,-1),.3,colors.lightgrey),('BOTTOMPADDING',(0,0),(-1,-1),8)])
                 story.append(table);story.append(Spacer(1,12))
             story.append(Paragraph(escape(payload['footer'] or 'Management records; not an independent audit or certification.'),styles['BodyText']))
+            from functools import partial
             from cyberstudio.report_style import pdf_page
-            SimpleDocTemplate(target,title='Security Program Board Report').build(story,onFirstPage=pdf_page,onLaterPages=pdf_page)
+            SimpleDocTemplate(target,title='Security Program Board Report',leftMargin=46,rightMargin=46,topMargin=112,bottomMargin=64).build(story,onFirstPage=partial(pdf_page,brand=brand),onLaterPages=partial(pdf_page,brand=brand))
             mime='application/pdf'
         else:
             from openpyxl import Workbook
@@ -524,6 +518,6 @@ def custom_report(org:str,format:str,body:dict,request:Request):
             for key,items in payload['sections'].items():
                 sheet=wb.create_sheet(key.title());columns=list(items[0]) if items else ['No records'];sheet.append(columns)
                 for row in items:sheet.append([_safe_excel(str(row.get(c,''))) for c in columns])
-            style_workbook(wb);wb.save(target);mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            style_workbook(wb,summary_header=1,brand=brand);ws.row_dimensions[4].height=90;wb.save(target);mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         audit(db,u['username'],'custom_report:'+format)
         return Response(target.getvalue(),media_type=mime,headers={'Content-Disposition':'attachment; filename="board-report.'+format+'"'})

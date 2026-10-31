@@ -148,7 +148,8 @@ def test_snapshots_reminders_preferences_branding_and_reports(web):
     from PIL import Image
     image=io.BytesIO();Image.new('RGB',(10,10),'blue').save(image,format='PNG')
     assert web.post(f'/api/experience/{org}/branding/logo',content=image.getvalue(),headers={'content-type':'image/png'}).status_code==200
-    assert web.get(f'/api/experience/{org}/branding/logo').content==image.getvalue()
+    decoded=Image.open(io.BytesIO(web.get(f'/api/experience/{org}/branding/logo').content))
+    assert decoded.size==(10,10) and decoded.convert('RGB').getpixel((0,0))==(0,0,255)
 
 
 def test_migration_preserves_owner_and_records(web):
@@ -168,3 +169,33 @@ def test_invitation_expiry_and_generic_read_only_protection(web):
     assert TestClient(app,base_url='https://testserver').post('/api/invitation/redeem',json={'token':invite['token']}).status_code==403
     viewer.headers.pop('x-csrf-token')
     assert viewer.post(f'/api/experience/{org}/preferences',json={'theme':'light'}).status_code==403
+
+
+def test_shared_report_identity_and_branding_permissions(web):
+    from openpyxl import load_workbook
+    org,other,_,_=base(web)
+    profile={'display_name':'Shared Identity','tagline':'Board oversight','primary_color':'#234567','accent_color':'#008080','footer_note':'Internal'}
+    url='/api/report-branding/'+org
+    for role in ('viewer','editor','reviewer'):
+        member=invited(web,org,'brand_'+role,role)
+        assert member.get(url).json()['can_edit'] is False
+        assert member.post(url,data=profile).status_code==403
+        assert member.get('/api/report-branding/'+other).status_code==403
+    assert web.post(url,data={**profile,'program_owner':'Changed'}).status_code==422
+    assert web.post(url,data=profile).status_code==200
+    assert web.get('/api/experience/'+org).json()['settings']['brand_name']=='Shared Identity'
+    send(web,org,'settings',{'brand_name':'Updated Workspace Name','reminder_frequency':'weekly'})
+    assert web.get(url).json()['display_name']=='Updated Workspace Name'
+    from PIL import Image
+    data=io.BytesIO();Image.new('RGB',(500,100),'blue').save(data,format='PNG')
+    assert web.post(f'/api/experience/{org}/branding/logo',content=data.getvalue(),headers={'content-type':'image/png'}).status_code==200
+    assert web.get(url).json()['has_logo'] is True
+    result=web.post(f'/api/experience/{org}/reports/xlsx',json={'sections':['summary','vendors']})
+    assert result.status_code==200,result.text
+    workbook=load_workbook(io.BytesIO(result.content))
+    assert workbook['Report Identity']['A1'].value=='Updated Workspace Name'
+    assert workbook['Report Identity']._images
+    assert all(s.oddFooter.center.text=='Program Owner - Matthew Harris' for s in workbook)
+    assert web.post(url,data={**profile,'remove_logo':'true'}).status_code==200
+    settings=web.get('/api/experience/'+org).json()['settings']
+    assert settings['has_logo'] is False and settings['reminder_frequency']=='weekly'
