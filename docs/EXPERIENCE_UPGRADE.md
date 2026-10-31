@@ -53,3 +53,14 @@ The schema is in `web/experience.py`, applied by the existing privileged databas
 No external invitation emails, team accounts, vendors, or customer records are created automatically. The owner creates memberships and invitations through Workspace hub. Background daily snapshots and due-date notifications begin after deployment.
 
 Tests cover role isolation across old and new endpoints, vendor token scope/CSRF/one-use/expiry/revocation, response conflicts and conditional completion, review locking, evidence scope, mentions, dependency cycles and completion guards, migration idempotence, report formats, logo validation and reminder/snapshot deduplication. Production owner credentials are not used by the test suite.
+
+## Observed deployment validation — October 31, 2026
+
+- Final image build: `cyber-ops-online-studio-web:3d521131-a3a2-4d4f-acbc-2196ba4de6ca`, SUCCEEDED. Resolved source `bd0eb460a31e265cc6e6dac3cf6482a7c6282897`; runtime file hashes match the merged implementation in PR #2 (`e091ac22a6ec14136d75b3d709390d3d68190b6e`). Later changes to the source tree were documentation only.
+- 61 backend tests passed against the isolated PostgreSQL test database; four Node interface tests passed. Browser acceptance passed for branding, questionnaire autosave/conditions/review, board status, report preview, themes, search, invitations and mobile layout. The read-only non-root container database/temp-volume smoke test passed.
+- Additive migration task `bf821ae01d2c4adaaaff8b393149fc10` exited 0 using `cyber-ops-online-studio-experience-migrate:1`. No existing owner password or customer record was replaced.
+- Final image `experience-20261031-v4`, digest `sha256:537724acfcc67d42694adf2dab0624550942d0dfba224f65fd66e2bf27d78fd9`: ECR scan COMPLETE with no findings at validation time.
+- Runtime stack UPDATE_COMPLETE. ECS application task definition `cyber-ops-online-studio-web:7` reached COMPLETED with two running tasks and zero failed tasks; both ALB targets healthy.
+- Live custom domain returned HTTP 200 for the owner-branded sign-in page, health/readiness, new JavaScript/CSS, and `/portal` and `/join` invitation surfaces. Readiness reports the database connected. `/api/portal` and organization experience data endpoints return HTTP 401 without an authenticated session.
+- Browser business workflows and role isolation were exercised with synthetic accounts in the isolated test environment. The real owner's authenticated live browser session was not used; no real credentials, invitations, or external messages were retrieved/sent for validation.
+- Future release builds should use a resolved GitHub commit, `infra/experience-buildspec.yml` and a new immutable image tag. The project's historical S3 source archive was not refreshed by this release; do not rebuild it assuming it contains the latest source.
