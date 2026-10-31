@@ -43,6 +43,10 @@ All twenty requested improvements are documented in [Experience upgrade](docs/EX
 
 Reminders and mentions are in-app. Invitation links are copied for secure sharing; no email/SMS provider is configured. Historical snapshots begin at activation and do not infer earlier exposure. Fixed Program Owner - Matthew Harris attribution is preserved independently of configurable organization branding.
 
+### Report branding
+
+In **Board & reporting → Report branding**, the workspace owner can upload a PNG/JPEG logo, choose report colors, and set a display name, tagline and footer. The shared identity is applied to executive, governance and custom board PDF/Excel exports. The fixed Program Owner - Matthew Harris attribution is retained. [Instructions, limits and validation](docs/REPORT_BRANDING.md).
+
 ### Online capabilities
 
 The browser workspace provides assessments and templates, risk/remediation and residual scores, framework activation and scoped implementation tracking, reference control evaluations, vendors, vulnerabilities, evidence upload/review, change management and CAB records, audits/findings, initiatives, board records, CSV preview/import, executive/board PDF and Excel reports, and domain audit history. An advanced action form exposes the supported public service operations.

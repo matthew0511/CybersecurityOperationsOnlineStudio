@@ -15,3 +15,11 @@ Endpoints: GET/POST `/api/report-branding/{org}`; GET `/api/report-branding/{org
 This release uses the existing workspace settings table and requires no additional production schema migration. Existing reminders and unrelated settings are retained when branding is saved. The normal migration creates the workspace schema for fresh installations. Build from a pinned GitHub commit using an immutable image tag; the project's historical S3 source archive may be older than the GitHub branch.
 
 Tests cover normalization, invalid files/oversized pixels, organization isolation, persisted settings, logo retention/removal, Excel formula protection, embedded images, fixed owner footers, authentication/CSRF and all four branded report downloads.
+
+## Validation — 31 October 2026
+
+- Application source: `0fa5ae7600ff9ad4b7d99be2d61a25f4677482dd`.
+- AWS CodeBuild `cyber-ops-online-studio-web:2d638ba5-7542-475b-bd64-742d3af3f3d3`: 65 backend tests passed against isolated PostgreSQL, four calculation tests passed, and browser acceptance passed, including selecting a logo and saving report branding.
+- Hardened non-root/read-only runtime container smoke test passed. ECR image `branding-20261031-v1` scanned with no findings at validation time; digest `sha256:1f2faddc6f160b1396205cd83917281571340f84f8df97e8c01daa6a4e4b6d05`.
+- Synthetic branded board/executive PDFs were rendered and inspected; exported PDF text includes the brand identity and fixed program owner attribution. Excel cover identities, embedded images, protected formula-like labels and fixed owner footers were checked.
+- Tests verify that viewer/editor/reviewer roles cannot change branding, organization data remains scoped, reminder settings survive branding changes, and both reporting surfaces share the same identity.

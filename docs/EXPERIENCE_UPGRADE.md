@@ -18,7 +18,7 @@ This release implements the twenty requested experience improvements in the exis
 |12|Historical trends|Background service captures one immutable daily snapshot per active organization. Trends shows exposure, risk/task counts and scoped verified controls. No history before activation is invented.|
 |13|Board report builder|Workspace hub → Report builder: select sections, record dates, commentary, preview, and branded PDF/XLSX exports. Current summary is labeled separately from period-filtered records.|
 |14|Kanban / dependency timeline|Workspace hub → Work board: drag cards or use accessible status dropdowns; chronological schedule and prerequisites; cycle detection and completion gates apply to legacy APIs too.|
-|15|Branding|Owner configures organization brand name, accent, logo and report footer. Validated PNG/JPEG logos are limited to 200 KB and 2000×2000 pixels.|
+|15|Branding|Owner configures organization brand name, accent, logo and report footer. Validated PNG/JPEG logos are limited to 2 MiB and eight million source pixels, normalized proportionally within 1200×400 pixels. Advanced report identity settings and formatted exports are documented in [Report branding](REPORT_BRANDING.md).|
 |16|Themes|Light, dark and system preference; persisted per user/organization with immediate local application.|
 |17|Search / shortcuts|Header search or Ctrl/Cmd K searches display titles within the current authorized organization and offers quick actions.|
 |18|Onboarding|Workspace hub → Onboarding displays organization, vendor, answered assessment and published snapshot milestones. Dashboard prompt can be dismissed.|
