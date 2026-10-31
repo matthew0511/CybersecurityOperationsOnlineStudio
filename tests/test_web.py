@@ -31,6 +31,13 @@ def web(monkeypatch):
     if not os.getenv('TEST_DATABASE_URL'):
         pytest.skip('PostgreSQL integration is run in CodeBuild against an isolated test database')
     monkeypatch.setenv('SETUP_TOKEN','synthetic-one-use-code')
+    monkeypatch.setenv('AUTH_ENCRYPTION_KEY','synthetic-test-only-encryption-key')
+    monkeypatch.setenv('PUBLIC_ORIGIN','https://testserver')
+    monkeypatch.setenv('SCAN_BUCKET','synthetic-test-scan-bucket')
+    from platform_support import FakeS3
+    from cyberstudio.web.platform import quarantine
+    scanner=FakeS3()
+    monkeypatch.setattr(quarantine,'client',lambda *args,**kwargs:scanner)
     with connect() as db:
         # TEST_DATABASE_URL must point to the disposable postgres test container.
         assert db.info.dbname=='studio_test', 'Refusing destructive test reset outside studio_test'

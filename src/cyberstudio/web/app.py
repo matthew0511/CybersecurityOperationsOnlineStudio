@@ -23,6 +23,9 @@ from cyberstudio.service import ValidationError, NotFoundError
 from cyberstudio.enterprise import EnterpriseGovernanceService
 from cyberstudio.web.database import connect, service
 from cyberstudio.web.experience import router as experience_router, authorize, require_owner, tick
+from cyberstudio.web.platform.router import router as platform_router
+from cyberstudio.web.platform.security import router as security_router
+from cyberstudio.web.platform.auditor import router as auditor_router
 import threading
 from contextlib import asynccontextmanager
 import logging
@@ -35,7 +38,11 @@ async def lifespan(app):
         while not stop.is_set():
             try:
                 with connect() as db, db.transaction():
+                    from .platform.schema import system_actor
+                    from .platform.jobs import tick as platform_tick
+                    system_actor(db)
                     tick(db)
+                    platform_tick(db)
             except Exception:
                 logging.getLogger(__name__).warning('Scheduled snapshot/reminder pass failed; retrying next minute')
             stop.wait(60)
@@ -108,6 +115,11 @@ def principal(db, request, *, write=False):
         raise HTTPException(401, 'Sign in required')
     if write and not hmac.compare_digest(request.headers.get('x-csrf-token', ''), row['csrf']):
         raise HTTPException(403, 'Refresh your session and retry')
+    from .platform.security import enrollment_required
+    if enrollment_required(db,row['username']) and not (request.url.path.startswith('/api/security') or request.url.path in {'/api/me','/api/logout'}):
+        raise HTTPException(403,'Enroll an authenticator in Account security before accessing organization data')
+    from .platform.schema import actor
+    actor(db,row['username'])
     return row
 
 
@@ -128,7 +140,7 @@ def ready():
     try:
         with connect() as db:
             row = db.execute("SELECT version FROM web_schema WHERE name='web'").fetchone()
-            if not row or row['version'] != 1:
+            if not row or row['version'] != 1 or not db.execute("SELECT 1 FROM web_schema WHERE name='platform' AND version=1").fetchone():
                 raise RuntimeError('Schema unavailable')
         return {'status': 'ready', 'database': 'connected'}
     except Exception:
@@ -171,12 +183,16 @@ def login(body: dict, request: Request):
         row = db.execute('SELECT * FROM web_users WHERE username=%s', (username,)).fetchone()
         if not row or not row['enabled'] or not verify_password(row['password_hash'], password):
             raise HTTPException(401, 'Invalid username or password')
+        from .platform.security import login_factor
+        login_factor(db,row,body)
         token, csrf = secrets.token_urlsafe(48), secrets.token_urlsafe(32)
         with db.transaction():
             db.execute('DELETE FROM web_attempts WHERE key=%s', (digest('login:' + username),))
             db.execute('DELETE FROM web_sessions WHERE expires_at<=%s', (now(),))
             db.execute('INSERT INTO web_sessions VALUES (%s,%s,%s,%s)', (digest(token), username, csrf, now()+28800))
-        response = JSONResponse({'username': username, 'csrf': csrf})
+            db.execute('INSERT INTO pl_session_meta VALUES (%s,%s,%s,%s,%s)',(digest(token),username,now(),request.headers.get('user-agent','')[:500],'password+mfa' if body.get('mfa_code') else 'password'))
+        from .platform.security import enrollment_required
+        response = JSONResponse({'username': username, 'csrf': csrf,'enrollment_required':enrollment_required(db,username)})
         response.set_cookie(COOKIE, token, max_age=28800, secure=True, httponly=True, samesite='strict', path='/')
         return response
 
@@ -185,7 +201,8 @@ def login(body: dict, request: Request):
 def me(request: Request):
     with connect() as db:
         user = principal(db, request)
-        return {'username': user['username'], 'csrf': user['csrf'], 'role': user['role']}
+        from .platform.security import enrollment_required
+        return {'username': user['username'], 'csrf': user['csrf'], 'role': user['role'],'enrollment_required':enrollment_required(db,user['username'])}
 
 
 @app.post('/api/logout')
@@ -302,7 +319,12 @@ async def upload(kind: str, request: Request):
         authorize(db,user,org,True,'link_evidence' if kind=='evidence' else 'import')
         with db.transaction():
             if kind=='evidence':
-                result = svc.add_evidence(org,str(form.get('title','')),file.filename or 'evidence',content,file.content_type or 'application/octet-stream',str(form.get('expires_on','')))
+                from .platform.quarantine import submit
+                assessment=str(form.get('assessment',''));code=str(form.get('code',''))
+                if assessment:
+                    svc._exists('assessments',assessment,org)
+                    if not db.execute('SELECT 1 FROM assessment_questions WHERE organization_id=%s AND assessment_id=%s AND code=%s',(org,assessment,code)).fetchone():raise HTTPException(422,'Select a question in this assessment')
+                result=submit(db,org,user['username'],file.filename or 'evidence',content,{'title':str(form.get('title','')),'mime_type':file.content_type or 'application/octet-stream','expires_on':str(form.get('expires_on','')),'assessment':assessment,'code':code,'group_id':str(form.get('group_id',''))})
             elif kind in {'preview','import'}:
                 module = str(form.get('module','risks'))
                 if kind=='import' and form.get('confirmed')!='true':
@@ -378,7 +400,7 @@ def report(org: str, kind: str, extension: str, request: Request):
         raise HTTPException(404,'Unknown report')
     with connect() as db:
         user=principal(db,request)
-        authorize(db,user,org)
+        authorize(db,user,org,operation='reports:export')
         svc=service(db)
         with tempfile.TemporaryDirectory() as folder:
             dest=Path(folder)/('report.'+extension)
@@ -392,6 +414,9 @@ def report(org: str, kind: str, extension: str, request: Request):
 
 
 app.include_router(experience_router)
+app.include_router(platform_router)
+app.include_router(security_router)
+app.include_router(auditor_router)
 
 app.mount('/static', StaticFiles(directory=STATIC), name='static')
 
@@ -399,3 +424,7 @@ app.mount('/static', StaticFiles(directory=STATIC), name='static')
 @app.get('/')
 def home():
     return FileResponse(STATIC/'index.html')
+
+@app.exception_handler(__import__('httpx').HTTPError)
+async def provider_unavailable(request,exc):
+    return JSONResponse({'detail':'The identity or integration provider is unavailable. Retry later; no provider response bodies or credentials are exposed.'},status_code=503)

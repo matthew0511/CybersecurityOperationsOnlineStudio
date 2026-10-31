@@ -65,12 +65,17 @@ def require_owner(user):
 
 def authorize(db,user,org,write=False,operation=''):
     service(db)._org(org)
+    from .platform.schema import actor
+    actor(db,user['username'],org)
     if user['role']=='owner':return 'owner'
     member=db.execute('SELECT role FROM xp_memberships WHERE username=%s AND organization_id=%s',(user['username'],org)).fetchone()
     if not member:raise HTTPException(403,'You do not have access to this organization')
     role=member['role']
     if write and (role=='viewer' or (role=='reviewer' and operation not in REVIEW_WRITES|{'response','comment','review','question_evidence'})):
         raise HTTPException(403,'Your organization role cannot perform this action')
+    cap='reports:export' if operation=='reports:export' else 'evidence:upload' if operation in {'link_evidence','question_evidence'} else 'records:approve' if operation in {'review','record_risk_decision'} else 'records:write' if write else 'records:read'
+    restriction=db.execute('SELECT denied FROM pl_capabilities WHERE organization_id=%s AND username=%s',(org,user['username'])).fetchone()
+    if restriction and (cap in restriction['denied'] or '*' in restriction['denied']):raise HTTPException(403,'This capability is restricted for your account')
     return role
 
 
@@ -118,7 +123,8 @@ def question_state(db,org,aid):
         q['section']=next((name for name,start,end in SECTIONS if start<=number<=end),'Questions')
         q['evidence']=[dict(r) for r in links if r['code']==q['code']]
         q['version']=versions.get(q['code'],0)
-    return qs
+    from .platform.workflows import apply_rules
+    return apply_rules(db,org,aid,qs)
 
 
 def review_summary(db,org,aid):
@@ -381,6 +387,8 @@ def vendor_session(db,request,write=False):
     r=db.execute('SELECT s.*,i.organization_id,i.assessment_id FROM xp_vendor_sessions s JOIN xp_invites i ON i.token_hash=s.invite_hash WHERE s.token_hash=%s AND s.expires_at>%s AND i.expires_at>%s AND NOT i.revoked',(hash_token(request.cookies.get(VCOOKIE,'')),epoch(),epoch())).fetchone()
     if not r:raise HTTPException(401,'Invitation session expired or revoked')
     if write and not hmac.compare_digest(request.headers.get('x-csrf-token',''),r['csrf']):raise HTTPException(403,'Refresh this invitation session')
+    from .platform.schema import system_actor
+    system_actor(db,r['organization_id'])
     return r
 
 
@@ -448,9 +456,9 @@ async def portal_evidence(code:str,request:Request):
         r=vendor_session(db,request,True);org=r['organization_id'];aid=r['assessment_id']
         if meta(db,org,aid)['state'] not in {'draft','needs_changes'}:raise HTTPException(409,'Questionnaire is locked')
         if code not in {q['code'] for q in service(db).questions(org,aid)}:raise HTTPException(404,'Question not found')
-        eid=service(db).add_evidence(org,'Vendor submission: '+code,file.filename or 'evidence',payload,file.content_type or 'application/octet-stream')
-        db.execute('INSERT INTO xp_question_evidence VALUES (%s,%s,%s,%s)',(org,aid,code,eid))
-        service(db).link_evidence(org,eid,'assessment',aid,'Vendor submitted for '+code)
+        from .platform.quarantine import submit
+        result=submit(db,org,'vendor invitation',file.filename or 'evidence',payload,{'title':'Vendor submission: '+code,'mime_type':file.content_type or 'application/octet-stream','assessment':aid,'code':code})
+        if isinstance(result,dict):return result
     return {'uploaded':True,'review_status':'pending'}
 
 
@@ -481,43 +489,49 @@ def report_payload(db,org,body):
 @router.post('/api/experience/{org}/reports/{format}')
 def custom_report(org:str,format:str,body:dict,request:Request):
     with connect() as db:
-        u=session(db,request,True);authorize(db,u,org)
+        u=session(db,request,True);authorize(db,u,org,operation='reports:export')
         payload=report_payload(db,org,body)
         brand=service(db).report_branding(org)
         if format=='preview':return payload
         if format not in {'pdf','xlsx'}:raise HTTPException(404,'Unsupported format')
-        target=io.BytesIO()
-        if format=='pdf':
-            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Image
-            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-            from reportlab.lib import colors
-            from xml.sax.saxutils import escape
-            styles=getSampleStyleSheet();story=[]
-            accent=colors.HexColor(payload['accent'])
-            ink=colors.black if (accent.red*.299+accent.green*.587+accent.blue*.114)>.6 else colors.white
-            header_style=ParagraphStyle('Branded table heading',parent=styles['BodyText'],textColor=ink)
-            story.extend([Paragraph(escape(payload['brand'] or payload['organization']),styles['Title']),Paragraph('Security Program | Board Report',styles['Heading1']),Paragraph(escape(payload['period_note']),styles['BodyText']),Spacer(1,12)])
-            if payload['commentary']:story.extend([Paragraph('Management commentary',styles['Heading2']),Paragraph(escape(payload['commentary']).replace('\n','<br/>'),styles['BodyText'])])
-            for key,items in payload['sections'].items():
-                story.append(Paragraph(key.title(),styles['Heading2']))
-                if not items:story.append(Paragraph('No records in the selected period.',styles['BodyText']));continue
-                columns=list(items[0]);data=[[Paragraph(escape(k.replace('_',' ').title()),header_style) for k in columns]]
-                for r in items:data.append([Paragraph(escape(str(r.get(k,''))),styles['BodyText']) for k in columns])
-                table=Table(data,colWidths=[490/len(columns)]*len(columns),repeatRows=1);table.setStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor(payload['accent'])),('VALIGN',(0,0),(-1,-1),'TOP'),('GRID',(0,0),(-1,-1),.3,colors.lightgrey),('BOTTOMPADDING',(0,0),(-1,-1),8)])
-                story.append(table);story.append(Spacer(1,12))
-            story.append(Paragraph(escape(payload['footer'] or 'Management records; not an independent audit or certification.'),styles['BodyText']))
-            from functools import partial
-            from cyberstudio.report_style import pdf_page
-            SimpleDocTemplate(target,title='Security Program Board Report',leftMargin=46,rightMargin=46,topMargin=112,bottomMargin=64).build(story,onFirstPage=partial(pdf_page,brand=brand),onLaterPages=partial(pdf_page,brand=brand))
-            mime='application/pdf'
-        else:
-            from openpyxl import Workbook
-            from cyberstudio.reports import _safe_excel
-            from cyberstudio.report_style import style_workbook
-            wb=Workbook();ws=wb.active;ws.title='Report';ws.append(['Security Program Board Report',_safe_excel(payload['brand'] or payload['organization'])]);ws.append(['As of',payload['as_of']]);ws.append(['Period',payload['start']+' to '+payload['end']]);ws.append(['Commentary',_safe_excel(payload['commentary'])]);ws.append(['Basis',payload['period_note']]);ws.append(['Footer',_safe_excel(payload['footer'])])
-            for key,items in payload['sections'].items():
-                sheet=wb.create_sheet(key.title());columns=list(items[0]) if items else ['No records'];sheet.append(columns)
-                for row in items:sheet.append([_safe_excel(str(row.get(c,''))) for c in columns])
-            style_workbook(wb,summary_header=1,brand=brand);ws.row_dimensions[4].height=90;wb.save(target);mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        content=render_custom_report(db,org,payload,format,brand)
+        mime='application/pdf' if format=='pdf' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         audit(db,u['username'],'custom_report:'+format)
-        return Response(target.getvalue(),media_type=mime,headers={'Content-Disposition':'attachment; filename="board-report.'+format+'"'})
+        return Response(content,media_type=mime,headers={'Content-Disposition':'attachment; filename="board-report.'+format+'"'})
+
+def render_custom_report(db,org,payload,format,brand):
+    target=io.BytesIO()
+    if format=='pdf':
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Image
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib import colors
+        from xml.sax.saxutils import escape
+        styles=getSampleStyleSheet();story=[]
+        accent=colors.HexColor(payload['accent'])
+        ink=colors.black if (accent.red*.299+accent.green*.587+accent.blue*.114)>.6 else colors.white
+        header_style=ParagraphStyle('Branded table heading',parent=styles['BodyText'],textColor=ink)
+        story.extend([Paragraph(escape(payload['brand'] or payload['organization']),styles['Title']),Paragraph('Security Program | Board Report',styles['Heading1']),Paragraph(escape(payload['period_note']),styles['BodyText']),Spacer(1,12)])
+        if payload['commentary']:story.extend([Paragraph('Management commentary',styles['Heading2']),Paragraph(escape(payload['commentary']).replace('\n','<br/>'),styles['BodyText'])])
+        for key,items in payload['sections'].items():
+            story.append(Paragraph(key.title(),styles['Heading2']))
+            if not items:story.append(Paragraph('No records in the selected period.',styles['BodyText']));continue
+            columns=list(items[0]);data=[[Paragraph(escape(k.replace('_',' ').title()),header_style) for k in columns]]
+            for r in items:data.append([Paragraph(escape(str(r.get(k,''))),styles['BodyText']) for k in columns])
+            table=Table(data,colWidths=[490/len(columns)]*len(columns),repeatRows=1);table.setStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor(payload['accent'])),('VALIGN',(0,0),(-1,-1),'TOP'),('GRID',(0,0),(-1,-1),.3,colors.lightgrey),('BOTTOMPADDING',(0,0),(-1,-1),8)])
+            story.append(table);story.append(Spacer(1,12))
+        story.append(Paragraph(escape(payload['footer'] or 'Management records; not an independent audit or certification.'),styles['BodyText']))
+        from functools import partial
+        from cyberstudio.report_style import pdf_page
+        SimpleDocTemplate(target,title=payload.get('report_title','Security Program Board Report'),leftMargin=46,rightMargin=46,topMargin=112,bottomMargin=64).build(story,onFirstPage=partial(pdf_page,brand=brand),onLaterPages=partial(pdf_page,brand=brand))
+
+    else:
+        from openpyxl import Workbook
+        from cyberstudio.reports import _safe_excel
+        from cyberstudio.report_style import style_workbook
+        wb=Workbook();ws=wb.active;ws.title='Report';ws.append(['Security Program Board Report',_safe_excel(payload['brand'] or payload['organization'])]);ws.append(['As of',payload['as_of']]);ws.append(['Period',payload['start']+' to '+payload['end']]);ws.append(['Commentary',_safe_excel(payload['commentary'])]);ws.append(['Basis',payload['period_note']]);ws.append(['Footer',_safe_excel(payload['footer'])])
+        for key,items in payload['sections'].items():
+            sheet=wb.create_sheet(key.title());columns=list(items[0]) if items else ['No records'];sheet.append(columns)
+            for row in items:sheet.append([_safe_excel(str(row.get(c,''))) for c in columns])
+        style_workbook(wb,summary_header=1,brand=brand);ws.row_dimensions[4].height=90;wb.save(target)
+    return target.getvalue()
+

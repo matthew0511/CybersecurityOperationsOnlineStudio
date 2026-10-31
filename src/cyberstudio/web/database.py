@@ -145,6 +145,9 @@ def migrate(raw):
         EnterpriseGovernanceService(PostgresVault(raw))
         from .experience import SCHEMA as EXPERIENCE_SCHEMA
         raw.execute(EXPERIENCE_SCHEMA)
+        from .platform.schema import migrate as migrate_platform
+        migrate_platform(raw)
+        raw.execute("INSERT INTO web_schema VALUES ('platform',1) ON CONFLICT(name) DO UPDATE SET version=1")
         raw.execute("INSERT INTO web_schema VALUES ('web',1) ON CONFLICT (name) DO NOTHING")
         raw.execute('CREATE OR REPLACE TRIGGER web_audit_no_update BEFORE UPDATE OR DELETE ON web_request_audit FOR EACH ROW EXECUTE FUNCTION reject_history_change()')
 
