@@ -14,10 +14,10 @@ The browser service is deployed on AWS ECS Fargate with private PostgreSQL persi
 | Runtime stack | `cyber-ops-online-studio-web` deployed |
 | Application containers | Two private Fargate tasks; both ALB targets healthy |
 | Native database | RDS PostgreSQL, encrypted storage, verified TLS connections |
-| Automated regression and integration tests | 53 backend tests + 4 interface calculation tests passed in AWS CodeBuild |
+| Automated regression and integration tests | 61 backend tests + 4 interface calculation tests + browser acceptance passed in AWS CodeBuild |
 | Runtime container smoke test | Non-root, read-only root filesystem, dropped capabilities, PostgreSQL connection and temporary-volume write passed |
 | Live HTTPS acceptance test | PASS: setup/login, core record workflows, four reports, CSRF rejection and logout revocation |
-| ECR image scan | Completed with no findings for `cosmetic-20261031-v2` at validation time |
+| ECR image scan | Completed with no findings for `experience-20261031-v4` at validation time |
 | Custom domain | `cybersecurityoperationstudio.com` connected; certificate/hostname verified, login page and database readiness checks passed |
 
 ### First-time owner access
