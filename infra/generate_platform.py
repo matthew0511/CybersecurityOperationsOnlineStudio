@@ -20,7 +20,9 @@ rule=S('arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/DO-NO
 stm=[dict(allow(['events:PutRule','events:DeleteRule','events:PutTargets','events:RemoveTargets'],rule),Condition={'StringEquals':{'events:ManagedBy':'malware-protection-plan.guardduty.amazonaws.com'}}),allow(['events:DescribeRule','events:ListTargetsByRule'],rule),allow(['s3:GetObjectTagging','s3:PutObjectTagging','s3:GetObjectVersionTagging','s3:PutObjectVersionTagging','s3:GetObject','s3:GetObjectVersion'],S('${ScanBucket.Arn}/*')),allow(['s3:GetBucketNotification','s3:PutBucketNotification','s3:ListBucket'],A('ScanBucket','Arn')),allow(['s3:PutObject'],S('${ScanBucket.Arn}/malware-protection-resource-validation-object'))]
 add('ScanRole','AWS::IAM::Role',{'AssumeRolePolicyDocument':assume('malware-protection-plan.guardduty.amazonaws.com'),'Policies':[{'PolicyName':'ManagedScanner','PolicyDocument':{'Version':'2012-10-17','Statement':stm}}],'Tags':tags})
 add('Scanner','AWS::GuardDuty::MalwareProtectionPlan',{'Role':A('ScanRole','Arn'),'ProtectedResource':{'S3Bucket':{'BucketName':R('ScanBucket'),'ObjectPrefixes':['uploads/']}},'Actions':{'Tagging':{'Status':'ENABLED'}},'Tags':tags})
-add('Alerts','AWS::SNS::Topic',{'DisplayName':'Online Studio operations','KmsMasterKeyId':'alias/aws/sns','Tags':tags})
+add('AlertsKey','AWS::KMS::Key',{'EnableKeyRotation':True,'KeyPolicy':{'Version':'2012-10-17','Statement':[{'Effect':'Allow','Principal':{'AWS':S('arn:${AWS::Partition}:iam::${AWS::AccountId}:root')},'Action':'kms:*','Resource':'*'},{'Effect':'Allow','Principal':{'Service':['cloudwatch.amazonaws.com','events.amazonaws.com']},'Action':['kms:Decrypt','kms:GenerateDataKey*'],'Resource':'*','Condition':{'StringEquals':{'aws:SourceAccount':R('AWS::AccountId')}}}]}},DeletionPolicy='Retain',UpdateReplacePolicy='Retain')
+add('Alerts','AWS::SNS::Topic',{'DisplayName':'Online Studio operations','KmsMasterKeyId':A('AlertsKey','Arn'),'Tags':tags})
+add('AlertsPolicy','AWS::SNS::TopicPolicy',{'Topics':[R('Alerts')],'PolicyDocument':{'Version':'2012-10-17','Statement':[{'Effect':'Allow','Principal':{'Service':['cloudwatch.amazonaws.com','events.amazonaws.com']},'Action':'sns:Publish','Resource':R('Alerts'),'Condition':{'StringEquals':{'aws:SourceAccount':R('AWS::AccountId')}}}]}})
 template={'AWSTemplateFormatVersion':'2010-09-09','Description':'Online Studio platform security keys, versioned malware quarantine and operations alert destination','Resources':resources,'Outputs':{n:{'Value':R(n)} for n in ['AuthKey','PlatformDatabase','ScanBucket','Alerts']}}
 (ROOT/'platform-security.json').write_text(json.dumps(template,indent=2)+'\n')
 t=json.loads((ROOT/'platform-runtime-base.json').read_text());p=t['Parameters'];rr=t['Resources']
@@ -40,4 +42,7 @@ for name in ['ApplicationTask','MigrationTask']:
             new=S('${PlatformDbSecretArn}:'+field+'::')
             secret['ValueFrom']=new if name=='MigrationTask' else {'Fn::If':['PlatformEnabled',new,secret['ValueFrom']]}
     c['Secrets'].append({'Name':'AUTH_ENCRYPTION_KEY','ValueFrom':R('AuthKeySecretArn')})
+import copy
+restore=copy.deepcopy(rr['MigrationTask']);restore['Properties']['Family']='cyber-ops-online-studio-restore';restore['Properties']['ContainerDefinitions'][0]['Command']=['python','-m','cyberstudio.web.platform.restore_verify'];rr['RestoreTask']=restore
+t['Outputs']['RestoreTask']={'Value':R('RestoreTask')}
 (ROOT/'platform-runtime.json').write_text(json.dumps(t,indent=2)+'\n')

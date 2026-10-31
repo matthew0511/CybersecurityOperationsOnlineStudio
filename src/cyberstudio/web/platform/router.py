@@ -44,6 +44,12 @@ def platform_catalog(request:Request):
         user=session(db,request)
         return {'features':catalog.features(),'modules':catalog.modules(),'providers':connectors.PROVIDERS,'report_templates':reporting.TEMPLATES,'role':user['role'],'security_key_ready':bool(os.getenv('AUTH_ENCRYPTION_KEY')),'scanner_ready':bool(os.getenv('SCAN_BUCKET'))}
 
+@router.get('/api/platform/operations')
+def operations(request:Request):
+    with connect() as db:
+        user=session(db,request);owner(user)
+        return {'checks':table_rows(db,'SELECT kind,result,recorded_at FROM pl_operations ORDER BY recorded_at DESC LIMIT 30'),'runtime':{'security_key_configured':bool(os.getenv('AUTH_ENCRYPTION_KEY')),'scanner_bucket_configured':bool(os.getenv('SCAN_BUCKET'))},'note':'Configuration flags do not prove a scan, restore or external delivery succeeded. Check the dated validation results.'}
+
 @router.get('/api/platform/portfolio')
 def portfolio(request:Request):
     with connect() as db:

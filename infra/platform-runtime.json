@@ -1491,6 +1491,166 @@
       "DependsOn": [
         "Listener"
       ]
+    },
+    "RestoreTask": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "Family": "cyber-ops-online-studio-restore",
+        "RequiresCompatibilities": [
+          "FARGATE"
+        ],
+        "NetworkMode": "awsvpc",
+        "Cpu": "512",
+        "Memory": "1024",
+        "ExecutionRoleArn": {
+          "Fn::GetAtt": [
+            "MigrationExecutionRole",
+            "Arn"
+          ]
+        },
+        "TaskRoleArn": {
+          "Fn::GetAtt": [
+            "ApplicationTaskRole",
+            "Arn"
+          ]
+        },
+        "RuntimePlatform": {
+          "OperatingSystemFamily": "LINUX",
+          "CpuArchitecture": "X86_64"
+        },
+        "Volumes": [
+          {
+            "Name": "scratch"
+          }
+        ],
+        "ContainerDefinitions": [
+          {
+            "Name": "studio",
+            "Image": {
+              "Fn::Join": [
+                ":",
+                [
+                  {
+                    "Ref": "RepositoryUri"
+                  },
+                  {
+                    "Ref": "ImageTag"
+                  }
+                ]
+              ]
+            },
+            "Essential": true,
+            "User": "10001:10001",
+            "ReadonlyRootFilesystem": true,
+            "LinuxParameters": {
+              "Capabilities": {
+                "Drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "Environment": [
+              {
+                "Name": "DB_HOST",
+                "Value": {
+                  "Ref": "DatabaseHost"
+                }
+              },
+              {
+                "Name": "DB_NAME",
+                "Value": "cyberops"
+              },
+              {
+                "Name": "APP_ENV",
+                "Value": "production"
+              },
+              {
+                "Name": "SCAN_BUCKET",
+                "Value": {
+                  "Ref": "ScanBucketName"
+                }
+              },
+              {
+                "Name": "PUBLIC_ORIGIN",
+                "Value": "https://cybersecurityoperationstudio.com"
+              },
+              {
+                "Name": "AWS_REGION",
+                "Value": {
+                  "Ref": "AWS::Region"
+                }
+              }
+            ],
+            "Secrets": [
+              {
+                "Name": "DB_USER",
+                "ValueFrom": {
+                  "Fn::Sub": "${PlatformDbSecretArn}:username::"
+                }
+              },
+              {
+                "Name": "DB_PASSWORD",
+                "ValueFrom": {
+                  "Fn::Sub": "${PlatformDbSecretArn}:password::"
+                }
+              },
+              {
+                "Name": "DB_ADMIN_USER",
+                "ValueFrom": {
+                  "Fn::Sub": "${MasterSecretArn}:username::"
+                }
+              },
+              {
+                "Name": "DB_ADMIN_PASSWORD",
+                "ValueFrom": {
+                  "Fn::Sub": "${MasterSecretArn}:password::"
+                }
+              },
+              {
+                "Name": "AUTH_ENCRYPTION_KEY",
+                "ValueFrom": {
+                  "Ref": "AuthKeySecretArn"
+                }
+              }
+            ],
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Ref": "AppLogs"
+                },
+                "awslogs-region": {
+                  "Ref": "AWS::Region"
+                },
+                "awslogs-stream-prefix": "migration",
+                "mode": "blocking"
+              }
+            },
+            "MountPoints": [
+              {
+                "SourceVolume": "scratch",
+                "ContainerPath": "/tmp",
+                "ReadOnly": false
+              }
+            ],
+            "Command": [
+              "python",
+              "-m",
+              "cyberstudio.web.platform.restore_verify"
+            ]
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          },
+          {
+            "Key": "Environment",
+            "Value": "dev"
+          }
+        ]
+      }
     }
   },
   "Outputs": {
@@ -1530,6 +1690,11 @@
     "SetupSecret": {
       "Value": {
         "Ref": "SetupSecret"
+      }
+    },
+    "RestoreTask": {
+      "Value": {
+        "Ref": "RestoreTask"
       }
     }
   }
