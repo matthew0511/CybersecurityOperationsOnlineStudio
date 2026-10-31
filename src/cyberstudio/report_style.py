@@ -48,7 +48,7 @@ def pdf_page(canvas,doc):
     canvas.setStrokeColor(colors.HexColor('#DCE5E8'))
     canvas.line(46,38,width-46,38)
     canvas.setFont('Helvetica',7)
-    canvas.drawString(46,25,'CONFIDENTIAL  |  Management records · protect after download')
+    canvas.drawString(46,25,'Program Owner - Matthew Harris  |  Confidential management records')
     canvas.drawRightString(width-46,25,f'{doc.page}')
     canvas.restoreState()
 
@@ -64,7 +64,7 @@ def style_workbook(wb,summary_header=5):
         ws.sheet_properties.pageSetUpPr.fitToPage=True
         ws.page_setup.orientation='landscape';ws.page_setup.paperSize=ws.PAPERSIZE_A4
         ws.page_setup.fitToWidth=1;ws.page_setup.fitToHeight=0
-        ws.oddFooter.center.text='CSOS | Confidential | Page &P of &N'
+        ws.oddFooter.center.text='Program Owner - Matthew Harris | Confidential | Page &P of &N'
         for column in ws.columns:
             width=min(56,max(18,max(len(str(c.value or '')) for c in column[:80])+3))
             ws.column_dimensions[column[0].column_letter].width=width
