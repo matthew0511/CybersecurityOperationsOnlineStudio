@@ -1,0 +1,1393 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Online Studio web runtime, private ECS/ALB, HTTPS API Gateway, build pipeline and management audit trail",
+  "Parameters": {
+    "VpcId": {
+      "Type": "String"
+    },
+    "AppSubnetA": {
+      "Type": "String"
+    },
+    "AppSubnetB": {
+      "Type": "String"
+    },
+    "TaskSecurityGroup": {
+      "Type": "String"
+    },
+    "DatabaseHost": {
+      "Type": "String"
+    },
+    "MasterSecretArn": {
+      "Type": "String"
+    },
+    "RepositoryUri": {
+      "Type": "String"
+    },
+    "ImageTag": {
+      "Type": "String"
+    },
+    "DeployService": {
+      "Type": "String",
+      "Default": "false",
+      "AllowedValues": [
+        "true",
+        "false"
+      ]
+    }
+  },
+  "Conditions": {
+    "ServiceEnabled": {
+      "Fn::Equals": [
+        {
+          "Ref": "DeployService"
+        },
+        "true"
+      ]
+    }
+  },
+  "Resources": {
+    "BuildBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "cyber-ops-online-studio-build-${AWS::AccountId}-${AWS::Region}"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "ExpireBuildSources",
+              "Status": "Enabled",
+              "Prefix": "source/",
+              "ExpirationInDays": 30,
+              "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 30
+              }
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          },
+          {
+            "Key": "Environment",
+            "Value": "dev"
+          }
+        ]
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "AuditBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "cyber-ops-online-studio-audit-${AWS::AccountId}-${AWS::Region}"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          },
+          {
+            "Key": "Environment",
+            "Value": "dev"
+          }
+        ]
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "AuditBucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "AuditBucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": "s3:GetBucketAcl",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "AuditBucket",
+                  "Arn"
+                ]
+              },
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceArn": {
+                    "Fn::Sub": "arn:${AWS::Partition}:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/cyber-ops-online-studio-management"
+                  }
+                }
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "cloudtrail.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${AuditBucket.Arn}/AWSLogs/${AWS::AccountId}/*"
+              },
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceArn": {
+                    "Fn::Sub": "arn:${AWS::Partition}:cloudtrail:${AWS::Region}:${AWS::AccountId}:trail/cyber-ops-online-studio-management"
+                  },
+                  "s3:x-amz-acl": "bucket-owner-full-control"
+                }
+              }
+            },
+            {
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "AuditBucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${AuditBucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "Trail": {
+      "Type": "AWS::CloudTrail::Trail",
+      "Properties": {
+        "TrailName": "cyber-ops-online-studio-management",
+        "S3BucketName": {
+          "Ref": "AuditBucket"
+        },
+        "IsLogging": true,
+        "IsMultiRegionTrail": true,
+        "IncludeGlobalServiceEvents": true,
+        "EnableLogFileValidation": true,
+        "EventSelectors": [
+          {
+            "IncludeManagementEvents": true,
+            "ReadWriteType": "All"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          },
+          {
+            "Key": "Environment",
+            "Value": "dev"
+          }
+        ]
+      },
+      "DependsOn": [
+        "AuditBucketPolicy"
+      ]
+    },
+    "LogsKey": {
+      "Type": "AWS::KMS::Key",
+      "Properties": {
+        "EnableKeyRotation": true,
+        "Description": "Online Studio operational log encryption",
+        "KeyPolicy": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Sub": "arn:${AWS::Partition}:iam::${AWS::AccountId}:root"
+                }
+              },
+              "Action": "kms:*",
+              "Resource": "*"
+            },
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": {
+                  "Fn::Sub": "logs.${AWS::Region}.amazonaws.com"
+                }
+              },
+              "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+              ],
+              "Resource": "*",
+              "Condition": {
+                "ArnLike": {
+                  "kms:EncryptionContext:aws:logs:arn": {
+                    "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:*"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "BuildLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/codebuild/cyber-ops-online-studio",
+        "RetentionInDays": 30,
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "LogsKey",
+            "Arn"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          },
+          {
+            "Key": "Environment",
+            "Value": "dev"
+          }
+        ]
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "AppLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/ecs/cyber-ops-online-studio-web",
+        "RetentionInDays": 30,
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "LogsKey",
+            "Arn"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          },
+          {
+            "Key": "Environment",
+            "Value": "dev"
+          }
+        ]
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "ApiLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": "/aws/apigateway/cyber-ops-online-studio",
+        "RetentionInDays": 30,
+        "KmsKeyId": {
+          "Fn::GetAtt": [
+            "LogsKey",
+            "Arn"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          },
+          {
+            "Key": "Environment",
+            "Value": "dev"
+          }
+        ]
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "DatabaseSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": "cyber-ops-online-studio-dev/application-db",
+        "Description": "Least-privilege PostgreSQL application credentials",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\":\"studioapp\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 48,
+          "ExcludePunctuation": true
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          },
+          {
+            "Key": "Environment",
+            "Value": "dev"
+          }
+        ]
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "SetupSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": "cyber-ops-online-studio-dev/setup",
+        "Description": "One-time owner bootstrap code. Consumed by creation of the first owner account.",
+        "GenerateSecretString": {
+          "PasswordLength": 48,
+          "ExcludePunctuation": true
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          },
+          {
+            "Key": "Environment",
+            "Value": "dev"
+          }
+        ]
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "BuildRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "codebuild.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ScopedBuild",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${BuildBucket.Arn}/source/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetBucketLocation"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "BuildBucket",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${BuildLogs.Arn}:*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:GetAuthorizationToken"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchGetImage",
+                    "ecr:InitiateLayerUpload",
+                    "ecr:UploadLayerPart",
+                    "ecr:CompleteLayerUpload",
+                    "ecr:PutImage"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/cyber-ops-online-studio-dev"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          },
+          {
+            "Key": "Environment",
+            "Value": "dev"
+          }
+        ]
+      }
+    },
+    "Builder": {
+      "Type": "AWS::CodeBuild::Project",
+      "Properties": {
+        "Name": "cyber-ops-online-studio-web",
+        "ServiceRole": {
+          "Fn::GetAtt": [
+            "BuildRole",
+            "Arn"
+          ]
+        },
+        "TimeoutInMinutes": 30,
+        "QueuedTimeoutInMinutes": 15,
+        "Artifacts": {
+          "Type": "NO_ARTIFACTS"
+        },
+        "Source": {
+          "Type": "S3",
+          "Location": {
+            "Fn::Sub": "${BuildBucket}/source/studio-web.zip"
+          },
+          "BuildSpec": "version: 0.2\nphases:\n  install:\n    commands:\n      - python -m pip install -r requirements-web.txt pytest httpx\n  pre_build:\n    commands:\n      - docker run --detach --name postgres-test --publish 127.0.0.1:5432:5432 --env POSTGRES_USER=studio_test --env POSTGRES_PASSWORD=synthetic-test-only --env POSTGRES_DB=studio_test postgres:18-alpine\n      - timeout 90 sh -c 'until docker exec postgres-test pg_isready -U studio_test; do sleep 2; done'\n      - PYTHONPATH=src TEST_DATABASE_URL=postgresql://studio_test:synthetic-test-only@127.0.0.1:5432/studio_test python -m pytest -q\n      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $REGISTRY\n  build:\n    commands:\n      - docker build --tag $IMAGE_URI .\n      - docker run --rm --read-only --cap-drop ALL --network host --env TEST_DATABASE_URL=postgresql://studio_test:synthetic-test-only@127.0.0.1:5432/studio_test --mount type=volume,source=studio-temp,target=/tmp $IMAGE_URI python -c \"import tempfile; from cyberstudio.web.database import connect; connect().execute('SELECT 1'); t=tempfile.TemporaryDirectory(); t.cleanup(); print('Read-only non-root container database and temporary-volume smoke test passed')\"\n      - docker push $IMAGE_URI\n"
+        },
+        "Environment": {
+          "Type": "LINUX_CONTAINER",
+          "ComputeType": "BUILD_GENERAL1_SMALL",
+          "Image": "aws/codebuild/standard:7.0",
+          "PrivilegedMode": true,
+          "EnvironmentVariables": [
+            {
+              "Name": "IMAGE_URI",
+              "Value": {
+                "Fn::Join": [
+                  ":",
+                  [
+                    {
+                      "Ref": "RepositoryUri"
+                    },
+                    {
+                      "Ref": "ImageTag"
+                    }
+                  ]
+                ]
+              }
+            },
+            {
+              "Name": "REGISTRY",
+              "Value": {
+                "Fn::Sub": "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com"
+              }
+            }
+          ]
+        },
+        "LogsConfig": {
+          "CloudWatchLogs": {
+            "Status": "ENABLED",
+            "GroupName": {
+              "Ref": "BuildLogs"
+            },
+            "StreamName": "build"
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          },
+          {
+            "Key": "Environment",
+            "Value": "dev"
+          }
+        ]
+      }
+    },
+    "RuntimeExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ScopedExecution",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchGetImage"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/cyber-ops-online-studio-dev"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:GetAuthorizationToken"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${AppLogs.Arn}:*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": [
+                    {
+                      "Ref": "DatabaseSecret"
+                    },
+                    {
+                      "Ref": "SetupSecret"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          },
+          {
+            "Key": "Environment",
+            "Value": "dev"
+          }
+        ]
+      }
+    },
+    "MigrationExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "ScopedExecution",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchGetImage"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/cyber-ops-online-studio-dev"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:GetAuthorizationToken"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${AppLogs.Arn}:*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": [
+                    {
+                      "Ref": "DatabaseSecret"
+                    },
+                    {
+                      "Ref": "MasterSecretArn"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          },
+          {
+            "Key": "Environment",
+            "Value": "dev"
+          }
+        ]
+      }
+    },
+    "ApplicationTaskRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ecs-tasks.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          },
+          {
+            "Key": "Environment",
+            "Value": "dev"
+          }
+        ]
+      }
+    },
+    "ApplicationTask": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "Family": "cyber-ops-online-studio-web",
+        "RequiresCompatibilities": [
+          "FARGATE"
+        ],
+        "NetworkMode": "awsvpc",
+        "Cpu": "512",
+        "Memory": "1024",
+        "ExecutionRoleArn": {
+          "Fn::GetAtt": [
+            "RuntimeExecutionRole",
+            "Arn"
+          ]
+        },
+        "TaskRoleArn": {
+          "Fn::GetAtt": [
+            "ApplicationTaskRole",
+            "Arn"
+          ]
+        },
+        "RuntimePlatform": {
+          "OperatingSystemFamily": "LINUX",
+          "CpuArchitecture": "X86_64"
+        },
+        "Volumes": [
+          {
+            "Name": "scratch"
+          }
+        ],
+        "ContainerDefinitions": [
+          {
+            "Name": "studio",
+            "Image": {
+              "Fn::Join": [
+                ":",
+                [
+                  {
+                    "Ref": "RepositoryUri"
+                  },
+                  {
+                    "Ref": "ImageTag"
+                  }
+                ]
+              ]
+            },
+            "Essential": true,
+            "User": "10001:10001",
+            "ReadonlyRootFilesystem": true,
+            "LinuxParameters": {
+              "Capabilities": {
+                "Drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "Environment": [
+              {
+                "Name": "DB_HOST",
+                "Value": {
+                  "Ref": "DatabaseHost"
+                }
+              },
+              {
+                "Name": "DB_NAME",
+                "Value": "cyberops"
+              },
+              {
+                "Name": "APP_ENV",
+                "Value": "production"
+              }
+            ],
+            "Secrets": [
+              {
+                "Name": "DB_USER",
+                "ValueFrom": {
+                  "Fn::Sub": "${DatabaseSecret}:username::"
+                }
+              },
+              {
+                "Name": "DB_PASSWORD",
+                "ValueFrom": {
+                  "Fn::Sub": "${DatabaseSecret}:password::"
+                }
+              },
+              {
+                "Name": "SETUP_TOKEN",
+                "ValueFrom": {
+                  "Ref": "SetupSecret"
+                }
+              }
+            ],
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Ref": "AppLogs"
+                },
+                "awslogs-region": {
+                  "Ref": "AWS::Region"
+                },
+                "awslogs-stream-prefix": "web",
+                "mode": "blocking"
+              }
+            },
+            "MountPoints": [
+              {
+                "SourceVolume": "scratch",
+                "ContainerPath": "/tmp",
+                "ReadOnly": false
+              }
+            ],
+            "PortMappings": [
+              {
+                "ContainerPort": 8080,
+                "Protocol": "tcp"
+              }
+            ],
+            "HealthCheck": {
+              "Command": [
+                "CMD-SHELL",
+                "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/readyz',timeout=4)\""
+              ],
+              "Interval": 30,
+              "Timeout": 5,
+              "Retries": 3,
+              "StartPeriod": 30
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          },
+          {
+            "Key": "Environment",
+            "Value": "dev"
+          }
+        ]
+      }
+    },
+    "MigrationTask": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "Family": "cyber-ops-online-studio-migrate",
+        "RequiresCompatibilities": [
+          "FARGATE"
+        ],
+        "NetworkMode": "awsvpc",
+        "Cpu": "512",
+        "Memory": "1024",
+        "ExecutionRoleArn": {
+          "Fn::GetAtt": [
+            "MigrationExecutionRole",
+            "Arn"
+          ]
+        },
+        "TaskRoleArn": {
+          "Fn::GetAtt": [
+            "ApplicationTaskRole",
+            "Arn"
+          ]
+        },
+        "RuntimePlatform": {
+          "OperatingSystemFamily": "LINUX",
+          "CpuArchitecture": "X86_64"
+        },
+        "Volumes": [
+          {
+            "Name": "scratch"
+          }
+        ],
+        "ContainerDefinitions": [
+          {
+            "Name": "studio",
+            "Image": {
+              "Fn::Join": [
+                ":",
+                [
+                  {
+                    "Ref": "RepositoryUri"
+                  },
+                  {
+                    "Ref": "ImageTag"
+                  }
+                ]
+              ]
+            },
+            "Essential": true,
+            "User": "10001:10001",
+            "ReadonlyRootFilesystem": true,
+            "LinuxParameters": {
+              "Capabilities": {
+                "Drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "Environment": [
+              {
+                "Name": "DB_HOST",
+                "Value": {
+                  "Ref": "DatabaseHost"
+                }
+              },
+              {
+                "Name": "DB_NAME",
+                "Value": "cyberops"
+              },
+              {
+                "Name": "APP_ENV",
+                "Value": "production"
+              }
+            ],
+            "Secrets": [
+              {
+                "Name": "DB_USER",
+                "ValueFrom": {
+                  "Fn::Sub": "${DatabaseSecret}:username::"
+                }
+              },
+              {
+                "Name": "DB_PASSWORD",
+                "ValueFrom": {
+                  "Fn::Sub": "${DatabaseSecret}:password::"
+                }
+              },
+              {
+                "Name": "DB_ADMIN_USER",
+                "ValueFrom": {
+                  "Fn::Sub": "${MasterSecretArn}:username::"
+                }
+              },
+              {
+                "Name": "DB_ADMIN_PASSWORD",
+                "ValueFrom": {
+                  "Fn::Sub": "${MasterSecretArn}:password::"
+                }
+              }
+            ],
+            "LogConfiguration": {
+              "LogDriver": "awslogs",
+              "Options": {
+                "awslogs-group": {
+                  "Ref": "AppLogs"
+                },
+                "awslogs-region": {
+                  "Ref": "AWS::Region"
+                },
+                "awslogs-stream-prefix": "migration",
+                "mode": "blocking"
+              }
+            },
+            "MountPoints": [
+              {
+                "SourceVolume": "scratch",
+                "ContainerPath": "/tmp",
+                "ReadOnly": false
+              }
+            ],
+            "Command": [
+              "python",
+              "-m",
+              "cyberstudio.web.database"
+            ]
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          },
+          {
+            "Key": "Environment",
+            "Value": "dev"
+          }
+        ]
+      }
+    },
+    "AlbSG": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Internal ALB; only API Gateway VPC link can reach it",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 8080,
+            "ToPort": 8080,
+            "DestinationSecurityGroupId": {
+              "Ref": "TaskSecurityGroup"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          },
+          {
+            "Key": "Environment",
+            "Value": "dev"
+          }
+        ]
+      }
+    },
+    "LinkSG": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "API Gateway VPC link egress to internal ALB",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80,
+            "DestinationSecurityGroupId": {
+              "Ref": "AlbSG"
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          },
+          {
+            "Key": "Environment",
+            "Value": "dev"
+          }
+        ]
+      }
+    },
+    "AlbIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "AlbSG"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 80,
+        "ToPort": 80,
+        "SourceSecurityGroupId": {
+          "Ref": "LinkSG"
+        }
+      }
+    },
+    "TaskIngress": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "TaskSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": 8080,
+        "ToPort": 8080,
+        "SourceSecurityGroupId": {
+          "Ref": "AlbSG"
+        }
+      }
+    },
+    "Alb": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "Scheme": "internal",
+        "Type": "application",
+        "Subnets": [
+          {
+            "Ref": "AppSubnetA"
+          },
+          {
+            "Ref": "AppSubnetB"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "Ref": "AlbSG"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          },
+          {
+            "Key": "Environment",
+            "Value": "dev"
+          }
+        ]
+      }
+    },
+    "Target": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "Protocol": "HTTP",
+        "Port": 8080,
+        "TargetType": "ip",
+        "HealthCheckPath": "/readyz",
+        "HealthCheckIntervalSeconds": 30,
+        "HealthyThresholdCount": 2,
+        "TargetGroupAttributes": [
+          {
+            "Key": "deregistration_delay.timeout_seconds",
+            "Value": "30"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          },
+          {
+            "Key": "Environment",
+            "Value": "dev"
+          }
+        ]
+      }
+    },
+    "Listener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "Properties": {
+        "LoadBalancerArn": {
+          "Ref": "Alb"
+        },
+        "Protocol": "HTTP",
+        "Port": 80,
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "Target"
+            }
+          }
+        ]
+      }
+    },
+    "VpcLink": {
+      "Type": "AWS::ApiGatewayV2::VpcLink",
+      "Properties": {
+        "Name": "cyber-ops-online-studio-private-link",
+        "SubnetIds": [
+          {
+            "Ref": "AppSubnetA"
+          },
+          {
+            "Ref": "AppSubnetB"
+          }
+        ],
+        "SecurityGroupIds": [
+          {
+            "Ref": "LinkSG"
+          }
+        ]
+      }
+    },
+    "Api": {
+      "Type": "AWS::ApiGatewayV2::Api",
+      "Properties": {
+        "Name": "Cyber Security Operations Online Studio",
+        "ProtocolType": "HTTP"
+      }
+    },
+    "Integration": {
+      "Type": "AWS::ApiGatewayV2::Integration",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Api"
+        },
+        "IntegrationType": "HTTP_PROXY",
+        "IntegrationUri": {
+          "Ref": "Listener"
+        },
+        "ConnectionId": {
+          "Ref": "VpcLink"
+        },
+        "ConnectionType": "VPC_LINK",
+        "IntegrationMethod": "ANY",
+        "PayloadFormatVersion": "1.0",
+        "TimeoutInMillis": 30000,
+        "RequestParameters": {
+          "overwrite:path": "$request.path"
+        }
+      }
+    },
+    "Route": {
+      "Type": "AWS::ApiGatewayV2::Route",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Api"
+        },
+        "RouteKey": "$default",
+        "Target": {
+          "Fn::Sub": "integrations/${Integration}"
+        }
+      }
+    },
+    "Stage": {
+      "Type": "AWS::ApiGatewayV2::Stage",
+      "Properties": {
+        "ApiId": {
+          "Ref": "Api"
+        },
+        "StageName": "$default",
+        "AutoDeploy": true,
+        "DefaultRouteSettings": {
+          "ThrottlingBurstLimit": 50,
+          "ThrottlingRateLimit": 25
+        },
+        "AccessLogSettings": {
+          "DestinationArn": {
+            "Fn::GetAtt": [
+              "ApiLogs",
+              "Arn"
+            ]
+          },
+          "Format": "{\"requestId\":\"$context.requestId\",\"route\":\"$context.routeKey\",\"status\":\"$context.status\",\"responseLength\":\"$context.responseLength\"}"
+        }
+      }
+    },
+    "Service": {
+      "Type": "AWS::ECS::Service",
+      "Properties": {
+        "ServiceName": "cyber-ops-online-studio-web",
+        "Cluster": "cyber-ops-online-studio-dev",
+        "TaskDefinition": {
+          "Ref": "ApplicationTask"
+        },
+        "DesiredCount": 2,
+        "LaunchType": "FARGATE",
+        "PlatformVersion": "LATEST",
+        "HealthCheckGracePeriodSeconds": 90,
+        "NetworkConfiguration": {
+          "AwsvpcConfiguration": {
+            "Subnets": [
+              {
+                "Ref": "AppSubnetA"
+              },
+              {
+                "Ref": "AppSubnetB"
+              }
+            ],
+            "SecurityGroups": [
+              {
+                "Ref": "TaskSecurityGroup"
+              }
+            ],
+            "AssignPublicIp": "DISABLED"
+          }
+        },
+        "LoadBalancers": [
+          {
+            "ContainerName": "studio",
+            "ContainerPort": 8080,
+            "TargetGroupArn": {
+              "Ref": "Target"
+            }
+          }
+        ],
+        "DeploymentConfiguration": {
+          "MinimumHealthyPercent": 100,
+          "MaximumPercent": 200,
+          "DeploymentCircuitBreaker": {
+            "Enable": true,
+            "Rollback": true
+          }
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "Cyber Security Operations Online Studio"
+          },
+          {
+            "Key": "Environment",
+            "Value": "dev"
+          }
+        ]
+      },
+      "Condition": "ServiceEnabled",
+      "DependsOn": [
+        "Listener"
+      ]
+    }
+  },
+  "Outputs": {
+    "Url": {
+      "Value": {
+        "Fn::GetAtt": [
+          "Api",
+          "ApiEndpoint"
+        ]
+      }
+    },
+    "BuildBucket": {
+      "Value": {
+        "Ref": "BuildBucket"
+      }
+    },
+    "BuildProject": {
+      "Value": {
+        "Ref": "Builder"
+      }
+    },
+    "MigrationTask": {
+      "Value": {
+        "Ref": "MigrationTask"
+      }
+    },
+    "AppTask": {
+      "Value": {
+        "Ref": "ApplicationTask"
+      }
+    },
+    "TargetGroup": {
+      "Value": {
+        "Ref": "Target"
+      }
+    },
+    "SetupSecret": {
+      "Value": {
+        "Ref": "SetupSecret"
+      }
+    }
+  }
+}

@@ -8,6 +8,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet
+from .reports import _safe_excel
 
 DISCLAIMER="Local operator-entered records. Reviewer names are not authenticated electronic signatures. Not a certification or independent audit."
 
@@ -42,7 +43,7 @@ def board_packet(service,org,path):
             ("Findings",service.findings(org),["title","severity","owner","due_date","status"]),
             ("Evidence",service.evidence_inventory(org),["title","classification","sha256","review_state","expires_on"])):
             ws=wb.create_sheet(label);ws.append(fields)
-            for obj in items:ws.append([str(obj.get(f,"")) for f in fields])
+            for obj in items:ws.append([_safe_excel(str(obj.get(f,""))) for f in fields])
             ws.freeze_panes="A2";ws.auto_filter.ref=ws.dimensions
             for col in "ABCDEFG":ws.column_dimensions[col].width=28
         wb.save(path)

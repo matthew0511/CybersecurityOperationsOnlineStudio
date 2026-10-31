@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cybersecurity-operations-studio"
-version = "0.3.0"
+version = "0.4.0"
 description = "Offline-first cybersecurity operations desktop prototype with control evaluations, vendors, vulnerabilities, evidence freshness and Notion migrations"
 requires-python = ">=3.11"
 dependencies = [

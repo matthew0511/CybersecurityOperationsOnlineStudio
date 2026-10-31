@@ -28,7 +28,7 @@ def export_pdf(svc: StudioService, org: str, destination: Path) -> Path:
     risks, tasks, assessments = svc.list_risks(org), svc.list_tasks(org), svc.list_assessments(org)
     destination = Path(destination)
     styles = getSampleStyleSheet()
-    story = [Paragraph("Cybersecurity Operations Studio", styles["Title"]),
+    story = [Paragraph("Cyber Security Operations Online Studio", styles["Title"]),
              Paragraph("Assessment & Risk Snapshot", styles["Heading2"]),
              Paragraph(f"Organization: {escape(record['name'])}", styles["Normal"]),
              Paragraph("Generated: " + datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"), styles["Normal"]),
@@ -65,7 +65,7 @@ def export_xlsx(svc: StudioService, org: str, destination: Path) -> Path:
     wb = Workbook()
     intro = wb.active
     intro.title = "Overview"
-    intro.append(["Cybersecurity Operations Studio — assessment and risk snapshot"])
+    intro.append(["Cyber Security Operations Online Studio — assessment and risk snapshot"])
     intro.append(["Organization", _safe_excel(record["name"])])
     intro.append(["Generated UTC", datetime.now(timezone.utc).isoformat(timespec="seconds")])
     intro.append(["Assessments", len(assessments)])

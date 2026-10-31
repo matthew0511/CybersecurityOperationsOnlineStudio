@@ -1,0 +1,11 @@
+.git
+**/__pycache__
+**/*.pyc
+**/*.egg-info
+.env*
+.venv
+artifacts
+*.csvault
+tests
+docs
+source.zip

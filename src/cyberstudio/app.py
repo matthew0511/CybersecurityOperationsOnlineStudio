@@ -22,7 +22,7 @@ from .enterprise import EnterpriseGovernanceService as StudioService
 from .governance_reports import board_packet
 from .vault import Vault, VaultError
 
-APP_TITLE = "Cybersecurity Operations Studio — Preview 0.3"
+APP_TITLE = "Cyber Security Operations Online Studio — Preview 0.3"
 THEME = """
 QWidget { background:#101b2a; color:#e9f0f9; font-family:'Segoe UI'; font-size:12px; }
 QMainWindow, QDialog { background:#101b2a; }
@@ -89,7 +89,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(outer)
         layout.setContentsMargins(22, 18, 22, 18)
         header = QHBoxLayout()
-        name = QLabel("Cybersecurity Operations Studio")
+        name = QLabel("Cyber Security Operations Online Studio")
         name.setObjectName("headline")
         header.addWidget(name)
         header.addStretch(1)
@@ -1292,7 +1292,7 @@ class MainWindow(QMainWindow):
 
 
 def get_vault(parent: QWidget | None = None) -> Vault | None:
-    path = Path(user_data_dir("Cybersecurity Operations Studio", "CyberStudio")) / "studio.csvault"
+    path = Path(user_data_dir("Cyber Security Operations Online Studio", "CyberStudio")) / "studio.csvault"
     is_new = not path.exists()
     if is_new:
         QMessageBox.information(parent, "First-time setup", "Create a passphrase (12+ characters) to protect your encrypted local vault.\n\nThere is no password reset service. Store the passphrase securely.")

@@ -30,7 +30,7 @@ def export_executive_xlsx(svc: Phase3Service, org: str, destination: Path) -> Pa
     record=svc.organization(org)
     m=svc.executive_metrics(org)
     wb=Workbook();summary=wb.active;summary.title='Executive Overview'
-    for row in [ ['Cybersecurity Operations Studio — Phase 3 executive snapshot'],
+    for row in [ ['Cyber Security Operations Online Studio — Phase 3 executive snapshot'],
                  ['Organization',_safe_cell(record['name'])],
                  ['Generated UTC',datetime.now(timezone.utc).isoformat(timespec='seconds')],
                  ['Disclosure',DISCLAIMER], ['Metric','Value'] ]:
@@ -80,7 +80,7 @@ def export_executive_xlsx(svc: Phase3Service, org: str, destination: Path) -> Pa
 def export_executive_pdf(svc: Phase3Service,org: str,destination: Path) -> Path:
     record=svc.organization(org); m=svc.executive_metrics(org)
     styles=getSampleStyleSheet()
-    story=[Paragraph('Cybersecurity Operations Studio',styles['Title']),
+    story=[Paragraph('Cyber Security Operations Online Studio',styles['Title']),
            Paragraph('Executive operations snapshot — Phase 3',styles['Heading2']),
            Paragraph('Organization: '+escape(record['name']),styles['Normal']),
            Paragraph('Generated UTC: '+datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M'),styles['Normal']),
