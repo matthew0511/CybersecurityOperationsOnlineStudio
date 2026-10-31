@@ -17,3 +17,5 @@ Narrative responses are stored in the existing rationale field and use the exist
 - No schema migration is needed. Live browser authentication and questionnaire entry were tested against the isolated PostgreSQL integration database, not through the real owner's production session.
 
 This build used CodeBuild source overrides `GITHUB`, repository `https://github.com/matthew0511/CybersecurityOperationsOnlineStudio.git`, and the pinned source commit above. The project's configured S3 source archive was not replaced; future builds must supply the intended GitHub source override or refresh that archive before building. Use a new immutable image tag for each release.
+
+Live rollout verification: ECS task definition `cyber-ops-online-studio-web:4` reached COMPLETED with two running tasks and zero failed tasks. The live HTTPS JavaScript returned HTTP 200 and contains the built-in questionnaire and response editor. `/healthz` and `/readyz` returned HTTP 200, with the database connected. No real owner credentials or production questionnaire answers were used during validation.
