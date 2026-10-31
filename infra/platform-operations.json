@@ -37,6 +37,14 @@
     },
     "TargetGroupName": {
       "Type": "String"
+    },
+    "RestoreScheduleState": {
+      "Type": "String",
+      "Default": "DISABLED",
+      "AllowedValues": [
+        "DISABLED",
+        "ENABLED"
+      ]
     }
   },
   "Resources": {
@@ -305,7 +313,9 @@
       "Properties": {
         "Description": "Monthly isolated PITR restore and read-only verification; never directs production traffic",
         "ScheduleExpression": "cron(0 4 1 * ? *)",
-        "State": "ENABLED",
+        "State": {
+          "Ref": "RestoreScheduleState"
+        },
         "Targets": [
           {
             "Id": "Restore",

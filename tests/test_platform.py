@@ -49,6 +49,8 @@ def test_independent_approval_acknowledgment_and_capabilities(web):
     assert policy['data']['approved_by']=='reviewer'
     post(viewer,org,'/record/'+policy['id']+'/acknowledge',{'version':policy['version'],'confirmed':True})
     result=web.get(f'/api/platform/{org}/record/{policy["id"]}').json();assert result['acknowledgments'][0]['username']=='viewer'
+    active=post(reviewer,org,'/record/'+policy['id']+'/status',{'version':policy['version'],'status':'active'})
+    post(web,org,'/records/policy',{'id':active['id'],'version':active['version'],'title':'Unauthorized rewrite','data':active['data']},409)
     post(web,org,'/capabilities',{'username':'reviewer','denied':['reports:export'],'password':PW})
     post(reviewer,org,'/editions',{'template':'board','format':'pdf'},403)
 
