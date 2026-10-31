@@ -2,7 +2,9 @@
 
 The browser service is deployed on AWS ECS Fargate with private PostgreSQL persistence. The original desktop application remains in this repository.
 
-**Live HTTPS workspace:** https://rxhza763j4.execute-api.us-east-2.amazonaws.com/
+**Live HTTPS workspace:** https://cybersecurityoperationstudio.com/
+
+[Custom domain configuration and validation](docs/CUSTOM_DOMAIN.md). The original AWS gateway address remains available.
 
 ## Online deployment: October 31, 2026
 
@@ -16,7 +18,7 @@ The browser service is deployed on AWS ECS Fargate with private PostgreSQL persi
 | Runtime container smoke test | Non-root, read-only root filesystem, dropped capabilities, PostgreSQL connection and temporary-volume write passed |
 | Live HTTPS acceptance test | PASS: setup/login, core record workflows, four reports, CSRF rejection and logout revocation |
 | ECR image scan | Completed with no findings for `cosmetic-20261031-v2` at validation time |
-| Custom domain | Certificate requested; DNS ownership validation and mapping remain pending |
+| Custom domain | `cybersecurityoperationstudio.com` connected; certificate/hostname verified, login page and database readiness checks passed |
 
 ### First-time owner access
 
