@@ -510,7 +510,7 @@ def render_custom_report(db,org,payload,format,brand):
         accent=colors.HexColor(payload['accent'])
         ink=colors.black if (accent.red*.299+accent.green*.587+accent.blue*.114)>.6 else colors.white
         header_style=ParagraphStyle('Branded table heading',parent=styles['BodyText'],textColor=ink)
-        story.extend([Paragraph(escape(payload['brand'] or payload['organization']),styles['Title']),Paragraph('Security Program | Board Report',styles['Heading1']),Paragraph(escape(payload['period_note']),styles['BodyText']),Spacer(1,12)])
+        story.extend([Paragraph(escape(payload['brand'] or payload['organization']),styles['Title']),Paragraph(escape('Security Program | '+payload.get('report_title','Board Report')),styles['Heading1']),Paragraph(escape(payload['period_note']),styles['BodyText']),Spacer(1,12)])
         if payload['commentary']:story.extend([Paragraph('Management commentary',styles['Heading2']),Paragraph(escape(payload['commentary']).replace('\n','<br/>'),styles['BodyText'])])
         for key,items in payload['sections'].items():
             story.append(Paragraph(key.title(),styles['Heading2']))
@@ -528,7 +528,7 @@ def render_custom_report(db,org,payload,format,brand):
         from openpyxl import Workbook
         from cyberstudio.reports import _safe_excel
         from cyberstudio.report_style import style_workbook
-        wb=Workbook();ws=wb.active;ws.title='Report';ws.append(['Security Program Board Report',_safe_excel(payload['brand'] or payload['organization'])]);ws.append(['As of',payload['as_of']]);ws.append(['Period',payload['start']+' to '+payload['end']]);ws.append(['Commentary',_safe_excel(payload['commentary'])]);ws.append(['Basis',payload['period_note']]);ws.append(['Footer',_safe_excel(payload['footer'])])
+        wb=Workbook();ws=wb.active;ws.title='Report';ws.append([_safe_excel('Security Program | '+payload.get('report_title','Board Report')),_safe_excel(payload['brand'] or payload['organization'])]);ws.append(['As of',payload['as_of']]);ws.append(['Period',payload['start']+' to '+payload['end']]);ws.append(['Commentary',_safe_excel(payload['commentary'])]);ws.append(['Basis',payload['period_note']]);ws.append(['Footer',_safe_excel(payload['footer'])])
         for key,items in payload['sections'].items():
             sheet=wb.create_sheet(key.title());columns=list(items[0]) if items else ['No records'];sheet.append(columns)
             for row in items:sheet.append([_safe_excel(str(row.get(c,''))) for c in columns])
