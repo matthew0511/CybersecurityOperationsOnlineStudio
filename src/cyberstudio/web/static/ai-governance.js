@@ -2,6 +2,7 @@
 const AI={tab:'Overview',reference:null};
 // Render captured Markdown with DOM text nodes. Source text never becomes HTML or code.
 AI.inline=(target,text)=>{
+ text=text.replace(/\[\[([^\]]+)\]\]\(([^)]+)\)/g,'[$1]($2)');
  const pattern=/\[([^\]]+)\]\(([^)]+)\)/g;let at=0;
  for(const match of text.matchAll(pattern)){
   target.append(document.createTextNode(text.slice(at,match.index).replace(/\*\*/g,'')));
