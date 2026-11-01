@@ -44,3 +44,7 @@ def features():
 
 def modules():
     return {k:dict(title=v[0],fields=v[1],approval=k in APPROVAL_KINDS) for k,v in MODULES.items()}
+
+from .ai_catalog import AI_MODULES,AI_APPROVAL_KINDS
+MODULES.update(AI_MODULES)
+APPROVAL_KINDS.update(AI_APPROVAL_KINDS)

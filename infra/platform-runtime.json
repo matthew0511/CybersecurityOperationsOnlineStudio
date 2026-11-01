@@ -55,6 +55,12 @@
       "Type": "String",
       "AllowedPattern": "[a-f0-9]{40}",
       "Description": "Pinned and validated GitHub source commit for the default build"
+    },
+    "ApplicationImageTag": {
+      "Type": "String",
+      "Default": "",
+      "AllowedPattern": "[A-Za-z0-9_.-]*",
+      "Description": "Optional application-only image tag; leaves migration and restore images unchanged"
     }
   },
   "Conditions": {
@@ -72,6 +78,18 @@
           "Ref": "EnablePlatform"
         },
         "true"
+      ]
+    },
+    "ApplicationImageOverride": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "ApplicationImageTag"
+            },
+            ""
+          ]
+        }
       ]
     }
   },
@@ -559,16 +577,34 @@
             {
               "Name": "IMAGE_URI",
               "Value": {
-                "Fn::Join": [
-                  ":",
-                  [
-                    {
-                      "Ref": "RepositoryUri"
-                    },
-                    {
-                      "Ref": "ImageTag"
-                    }
-                  ]
+                "Fn::If": [
+                  "ApplicationImageOverride",
+                  {
+                    "Fn::Join": [
+                      ":",
+                      [
+                        {
+                          "Ref": "RepositoryUri"
+                        },
+                        {
+                          "Ref": "ApplicationImageTag"
+                        }
+                      ]
+                    ]
+                  },
+                  {
+                    "Fn::Join": [
+                      ":",
+                      [
+                        {
+                          "Ref": "RepositoryUri"
+                        },
+                        {
+                          "Ref": "ImageTag"
+                        }
+                      ]
+                    ]
+                  }
                 ]
               }
             },
@@ -882,16 +918,34 @@
           {
             "Name": "studio",
             "Image": {
-              "Fn::Join": [
-                ":",
-                [
-                  {
-                    "Ref": "RepositoryUri"
-                  },
-                  {
-                    "Ref": "ImageTag"
-                  }
-                ]
+              "Fn::If": [
+                "ApplicationImageOverride",
+                {
+                  "Fn::Join": [
+                    ":",
+                    [
+                      {
+                        "Ref": "RepositoryUri"
+                      },
+                      {
+                        "Ref": "ApplicationImageTag"
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "Fn::Join": [
+                    ":",
+                    [
+                      {
+                        "Ref": "RepositoryUri"
+                      },
+                      {
+                        "Ref": "ImageTag"
+                      }
+                    ]
+                  ]
+                }
               ]
             },
             "Essential": true,

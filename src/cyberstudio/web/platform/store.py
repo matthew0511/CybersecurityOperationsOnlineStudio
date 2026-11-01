@@ -112,6 +112,9 @@ def validate(db,org,kind,data):
     if kind=='control_test' and result.get('result')=='pass':
         if not result.get('evidence_ids'):fail('A passing result requires supporting evidence')
         require_verified_evidence(db,org,result['evidence_ids'])
+    if kind.startswith('ai_'):
+        from .ai_governance import validate_record
+        result=validate_record(db,org,kind,result)
     return result
 
 def validate_rules(rules):
@@ -196,6 +199,9 @@ def transition(db,user,org,ident,body):
             reauthenticate(db,user,body)
             if status=='approved' and record['kind']=='answer':require_verified_evidence(db,org,data.get('evidence_ids',[]))
             if status=='approved' and data.get('expires_on') and data['expires_on']<date.today().isoformat():fail('The approval expiration has passed')
+            if status=='approved' and record['kind'] in {'ai_decision','ai_exception'}:
+                from .ai_governance import approve
+                approve(db,org,record)
             data={**data,'approved_by':user['username'],'approved_at':datetime.now(timezone.utc).isoformat(),'approval_version':record['version']+1}
             if record['kind']=='risk_approval':
                 from ..database import service

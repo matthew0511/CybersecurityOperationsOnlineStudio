@@ -80,6 +80,14 @@ GUIDES=[
 ]),
 ]
 
+GUIDES.append(('ai-governance','AI governance — original Notion Hub migration',[
+'Open AI Governance in the Governance navigation group. Its Overview shows configuration-bound release readiness, explicit current authorizations and blockers. Registers cover charters, use cases, data flows and dependencies, professional reviews, evaluations, independent decisions, exceptions, agent safeguards, monitoring, incidents/changes/retirement and workforce readiness.',
+'The Source reference tab preserves the complete original Cybersecurity Operations Hub AI Governance page from the 28 October 2026 export. It contains the 17 numbered sections, healthcare/dental playbooks, local control examples, 90-day roadmap and primary-source links. This is a dated reference snapshot, not live synchronization, an adopted policy or a current legal determination. No actual use case or person was created from illustrative examples.',
+'Create the use case first, then its data/dependency map and any agent safeguards. Complete scoped business, vendor, security, privacy, contract and operations reviews against that baseline with verified evidence. Clinical/patient-facing uses also need clinical review; critical autonomy needs special-authority review. Representative passing workflow, human-review and resilience tests are required; higher exposure adds authorization/adversarial tests and clinical uses add clinical tests. These are conservative Studio release gates, not asserted HSCC/NIST requirements or automatic approval.',
+'Business sponsorship, professional review, residual-risk acceptance and release authorization are distinct decision types. Submit decisions for independent assigned approval with reauthentication. Release authorization is bounded by its configuration/evidence baseline, stage and expiration. Configuration changes, evidence expiry, overdue reviews or unresolved material/high-impact events remove the current authorization indicator. Closing the latest release decision does not reactivate an older decision. Exceptions never automatically waive a legal obligation or release hold.',
+'The Studio records governance actions; it does not invoke AI models, enforce permissions inside an external agent, stop a vendor service, issue legal notices, activate Notion synchronization or send notifications just because a review date exists. Use the AI governance report template for branded frozen PDF, Excel or PowerPoint editions. All registers use the existing organization scope, row-level isolation, roles, CSRF protection, optimistic versions and append-only history. No schema migration or copied production Notion records is required.'
+]))
+
 def documentation():
     registry=features()
     for item in registry:

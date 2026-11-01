@@ -293,3 +293,18 @@ def demo(body:dict,request:Request):
 @router.get('/account-recovery')
 def recovery_page():return FileResponse(STATIC/'account-recovery.html')
 
+
+
+@router.get('/api/platform/ai/reference')
+def ai_reference(request:Request):
+    with connect() as db:
+        session(db,request)
+        from .ai_governance import reference
+        return reference()
+
+@router.get('/api/platform/{org}/ai/overview')
+def ai_overview(org:str,request:Request):
+    with connect() as db:
+        user=session(db,request,org)
+        from .ai_governance import overview
+        return overview(db,user,org)

@@ -69,7 +69,7 @@ def trash(db,user,org,kind,ident,restore=False):
     access(db,user,org,True,'records:delete')
     if kind=='program':
         record=get(db,org,ident,deleted=True)
-        if not restore and record['kind'] in {'policy','answer','risk_approval','exception'} and record['status'] in {'approved','active'}:fail('Close the approved record before archiving it',409)
+        if not restore and record['kind'] in {'policy','answer','risk_approval','exception','ai_decision','ai_exception'} and record['status'] in {'approved','active'}:fail('Close the approved record before archiving it',409)
         db.execute('UPDATE pl_records SET deleted_at=CASE WHEN %s THEN NULL ELSE CURRENT_TIMESTAMP END,version=version+1,updated_by=%s WHERE organization_id=%s AND id=%s',(restore,user['username'],org,ident))
     else:
         if kind not in LEGACY:fail('Unsupported archive type')

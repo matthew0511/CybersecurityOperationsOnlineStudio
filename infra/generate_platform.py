@@ -48,4 +48,11 @@ for name in ['ApplicationTask','MigrationTask']:
 import copy
 restore=copy.deepcopy(rr['MigrationTask']);restore['Properties']['Family']='cyber-ops-online-studio-restore';restore['Properties']['ContainerDefinitions'][0]['Command']=['python','-m','cyberstudio.web.platform.restore_verify'];rr['RestoreTask']=restore
 t['Outputs']['RestoreTask']={'Value':R('RestoreTask')}
+# Application-only releases keep migration and restore verifier revisions pinned.
+p['ApplicationImageTag']={'Type':'String','Default':'','AllowedPattern':'[A-Za-z0-9_.-]*','Description':'Optional application-only image tag; leaves migration and restore images unchanged'}
+t['Conditions']['ApplicationImageOverride']={'Fn::Not':[{'Fn::Equals':[R('ApplicationImageTag'),'']}]}
+application_image={'Fn::If':['ApplicationImageOverride',{'Fn::Join':[':',[R('RepositoryUri'),R('ApplicationImageTag')]]},rr['ApplicationTask']['Properties']['ContainerDefinitions'][0]['Image']]}
+rr['ApplicationTask']['Properties']['ContainerDefinitions'][0]['Image']=application_image
+for variable in rr['Builder']['Properties']['Environment']['EnvironmentVariables']:
+    if variable['Name']=='IMAGE_URI':variable['Value']=application_image
 (ROOT/'platform-runtime.json').write_text(json.dumps(t,indent=2)+'\n')
