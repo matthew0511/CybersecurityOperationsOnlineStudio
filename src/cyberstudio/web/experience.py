@@ -84,7 +84,8 @@ def record(db,org,kind,ident):
     if not isinstance(kind,str) or not isinstance(ident,str):raise HTTPException(422,'Record type and identifier must be text')
     table=TABLES.get(kind)
     if not table:raise HTTPException(422,'Unsupported record type')
-    row=db.execute(f'SELECT * FROM {table} WHERE organization_id=%s AND id=%s',(org,ident)).fetchone()
+    from psycopg import sql
+    row=db.execute(sql.SQL('SELECT * FROM {} WHERE organization_id=%s AND id=%s').format(sql.Identifier(table)),(org,ident)).fetchone()
     if not row:raise HTTPException(404,'Record not found in this organization')
     return dict(row)
 
@@ -245,7 +246,10 @@ def search(org:str,request:Request,q:str=''):
         if len(needle)<2:return {'results':[]}
         for kind,table in TABLES.items():
             # Search only explicit display fields; no evidence bytes or credentials.
-            for row in db.execute(f'SELECT id,title FROM {table} WHERE organization_id=%s' if kind!='vendor' else 'SELECT id,name AS title FROM vendors WHERE organization_id=%s',(org,)).fetchall():
+            from psycopg import sql
+            field='name' if kind=='vendor' else 'title'
+            query=sql.SQL('SELECT id,{} AS title FROM {} WHERE organization_id=%s').format(sql.Identifier(field),sql.Identifier(table))
+            for row in db.execute(query,(org,)).fetchall():
                 if needle in row['title'].casefold():results.append({'type':kind,**dict(row)})
         return {'results':results[:100]}
 

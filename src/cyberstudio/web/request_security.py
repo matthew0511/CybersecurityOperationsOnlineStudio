@@ -16,7 +16,12 @@ SECURITY_HEADERS = {
 
 def safe_compare(left, right):
     """Malformed token types and Unicode fail closed without compare_digest errors."""
-    return isinstance(left, str) and isinstance(right, str) and hmac.compare_digest(left.encode('utf-8'), right.encode('utf-8'))
+    if not isinstance(left, str) or not isinstance(right, str):
+        return False
+    try:
+        return hmac.compare_digest(left.encode('utf-8'), right.encode('utf-8'))
+    except UnicodeError:
+        return False
 
 
 def _object(pairs):
@@ -90,7 +95,8 @@ class RequestBoundary:
                 return await self.reject(send, 413, 'Request exceeds 7 MiB')
         chunks = []
         total = 0
-        if scope['method'] in {'POST', 'PUT', 'PATCH', 'DELETE'} or declared:
+        consumed = scope['method'] in {'POST', 'PUT', 'PATCH', 'DELETE'} or bool(declared)
+        if consumed:
             while True:
                 message = await receive()
                 if message['type'] == 'http.disconnect':
@@ -111,6 +117,8 @@ class RequestBoundary:
                 validate_json(raw)
             except (ValueError, UnicodeError, RecursionError):
                 return await self.reject(send, 422, 'Invalid JSON type, encoding, number or structure')
+        if not consumed:
+            return await self.app(scope, receive, send)
         delivered = False
 
         async def replay():

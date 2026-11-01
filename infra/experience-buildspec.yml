@@ -9,7 +9,7 @@ phases:
     commands:
       - docker run --detach --name postgres-test --publish 127.0.0.1:5432:5432 --env POSTGRES_USER=studio_test --env POSTGRES_PASSWORD=synthetic-test-only --env POSTGRES_DB=studio_test postgres:18-alpine
       - timeout 90 sh -c 'until docker exec postgres-test pg_isready -U studio_test; do sleep 2; done'
-      - python -m bandit -r src/cyberstudio/web/platform -ll -q
+      - python -m bandit -r src/cyberstudio/web -ll -q
       - python -m pip_audit -r requirements-web.txt
       - PYTHONPATH=src TEST_DATABASE_URL=postgresql://studio_test:synthetic-test-only@127.0.0.1:5432/studio_test python -m pytest -q
       - node --test tests/ui-core.test.cjs
@@ -20,3 +20,4 @@ phases:
       - docker build --tag $IMAGE_URI .
       - docker run --rm --read-only --cap-drop ALL --network host --env TEST_DATABASE_URL=postgresql://studio_test:synthetic-test-only@127.0.0.1:5432/studio_test --mount type=volume,source=studio-temp,target=/tmp $IMAGE_URI python -c "import tempfile; from cyberstudio.web.database import connect; connect().execute('SELECT 1'); t=tempfile.TemporaryDirectory(); t.cleanup(); print('Read-only non-root container database and temporary-volume smoke test passed')"
       - docker push $IMAGE_URI
+

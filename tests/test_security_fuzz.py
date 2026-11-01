@@ -147,7 +147,7 @@ def test_spreadsheet_and_html_payloads_are_data(web):
     from openpyxl import load_workbook
     login(web);org=call(web,'create_organization',name='Export corpus')
     payloads=['=1+1','+SUM(1,1)','-1+1','@SUM(1,1)','  =1+1','<img src=x onerror=alert(1)>']
-    for payload in payloads:call(web,'add_risk',org=org,title=payload,likelihood=2,impact=2)
+    for payload in payloads:call(web,'add_risk',org=org,title=payload,description='Synthetic export corpus',likelihood=2,impact=2,rationale='Synthetic test')
     result=web.get(f'/api/report/{org}/executive/xlsx')
     assert result.status_code==200
     wb=load_workbook(io.BytesIO(result.content))
