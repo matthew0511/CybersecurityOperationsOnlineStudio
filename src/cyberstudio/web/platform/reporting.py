@@ -68,7 +68,7 @@ def freeze(db,user,org,body):
     if template=='ai_governance':
         from .ai_governance import overview
         state=overview(db,user,org)
-        payload['sections']={'AI inventory':[{'use_case':c['title'],'owner':c['owner'],'risk_tier':c['risk_tier'],'authorization':c['authorization'],'review_on':c['review_on']} for c in state['cases']],'Release holds':[{'use_case':c['title'],'hold':hold} for c in state['cases'] for hold in c['blockers']],'Register counts':[{'register':k,'count':v} for k,v in state['counts'].items()]}
+        payload['sections']={'Use cases':[{'use_case':c['title'],'owner':c['owner'],'risk_tier':c['risk_tier'],'authorization':c['authorization'],'review_on':c['review_on']} for c in state['cases']],'Release holds':[{'use_case':c['title'],'hold':hold} for c in state['cases'] for hold in c['blockers']],'Register counts':[{'register':k,'count':v} for k,v in state['counts'].items()]}
         payload['period_note']='Current AI governance snapshot as of export; no retrospective authorization is inferred. '+state['note']
     payload['report_title']=TEMPLATES[template]['title'];brand=service(db).report_branding(org)
     if any(len(rows)>2000 for rows in payload['sections'].values()):fail('Narrow the period or selected sections to at most 2000 records per section')

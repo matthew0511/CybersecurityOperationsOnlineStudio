@@ -1,6 +1,7 @@
 """Original-Hub provenance, tenant isolation and configuration-bound release authorization."""
 from datetime import date,timedelta
 import hashlib,io
+from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from test_web import web,login,call,PW
@@ -56,6 +57,7 @@ def test_original_hub_reference_and_register_contract():
     assert ref['parent_page_id']=='df00be5631338303ac1781ee4baff573'
     assert ref['live_sync'] is False and len(ref['source_sha256'])==64
     assert len(ref['sections'])==19
+    assert hashlib.sha256(Path('docs/AI_GOVERNANCE_SOURCE_NOTION_2026-10-28.md').read_bytes()).hexdigest()==ref['source_sha256']
     assert '17. Workforce readiness' in ref['sections'][-2]['title']
     assert all(k in catalog.MODULES for k in ai_governance.AI_MODULES)
 
@@ -79,6 +81,8 @@ def test_ai_authentication_scope_and_input_boundaries(web):
 
 def test_ai_readiness_never_implies_approval_and_stale_baselines_fail_closed(web):
     org,_=setup(web);reviewer=invited(web,org,'reviewer','reviewer');case,eid=ready_case(web,org)
+    review=web.get('/api/platform/'+org+'/records/ai_review').json()[0]
+    post(web,org,'/records/ai_review',{'id':review['id'],'version':review['version'],'title':review['title'],'data':review['data']},409)
     state=web.get('/api/platform/'+org+'/ai/overview').json()['cases'][0]
     assert state['ready_for_human_release_review'] and state['authorization']=='not_authorized'
     record=decision(web,org,case,eid);record=status(web,org,record,'submitted')
@@ -110,7 +114,7 @@ def test_ai_frozen_board_reports_are_scoped_and_spreadsheet_safe(web):
     org,_=setup(web);save(web,org,'ai_use_case','=1+1',case_data())
     report=post(web,org,'/editions',{'template':'ai_governance','format':'xlsx'})
     response=web.get(report['download_url']);assert response.status_code==200
-    book=load_workbook(io.BytesIO(response.content));assert 'AI Inventory' in book.sheetnames
+    book=load_workbook(io.BytesIO(response.content));assert 'Use Cases' in book.sheetnames
     assert all(cell.data_type!='f' for sheet in book for row in sheet for cell in row)
     assert hashlib.sha256(response.content).hexdigest()==report['sha256']
     assert post(web,org,'/editions',{'template':'ai_governance','format':'pdf'})['bytes']>1000

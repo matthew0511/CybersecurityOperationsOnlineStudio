@@ -151,6 +151,7 @@ def save(db,user,org,kind,body):
     if 'version' in body and (isinstance(body['version'],bool) or not isinstance(body['version'],int) or body['version']<1):fail('Version must be a positive integer')
     ident=body.get('id') or uid();previous=get(db,org,ident,kind,lock=True) if body.get('id') else None
     if previous and previous['status'] not in {'draft','in_progress'} and kind in APPROVAL_KINDS:fail('Reopen the reviewed version before editing',409)
+    if previous and kind in {'ai_review','ai_evaluation','ai_training'} and previous['status'] not in {'draft','in_progress'}:fail('Reopen this completed AI review or evaluation before editing',409)
     if previous and body.get('version')!=previous['version']:fail('This record changed. Reload and reconcile your edit.',409)
     title=bounded(body.get('title',''),300)
     if not title:fail('Enter a record title')
