@@ -73,7 +73,11 @@ def control_coverage(db,org,rs):
     result=[]
     for r in rs:
         if r['kind']!='control':continue
-        cs=groups.get(r['id'],[]);outcomes=[c['outcome'] for c in cs]
+        cs=groups.get(r['id'],[]);outcomes=[]
+        for c in cs:
+            observed=c['outcome']
+            if observed=='pass':observed=operations.evaluate(db,org,by_id[c['id']])['outcome']
+            outcomes.append(observed)
         state='unknown' if not cs or 'unknown' in outcomes else 'failed' if 'fail' in outcomes else 'verified'
         if 'fail' in outcomes:state='failed'
         result.append({**item(r,''),'state':state,'checks':len(cs),'basis':'Latest recorded validation and configuration freshness; not live fleet coverage'})
@@ -127,6 +131,10 @@ def overview(db,user,org):
         if r['status'] in CLOSED:continue
         reason='assigned_approval' if r['status']=='submitted' and r['data'].get('approver')==username else 'assigned_work' if r['owner']==username else None
         if reason:work.append({**item(r,reason),'due_on':r['due_on'],'status':r['status'],'overdue':bool(r['due_on']) and str(r['due_on'])<today()})
+    from ..experience import action_items
+    for item_ in action_items(db,org):
+        if item_['owner']==username:
+            work.append({**item_,'legacy_type':item_['type'],'reason':'assigned_'+item_['type'],'due_on':item_['due'],'overdue':item_['days'] is not None and item_['days']<0})
     state=operations.summary(db,user,org)
     for c in state['checks']:
         if c['owner']==username and c['outcome']!='pass':work.append({**c,'reason':'validation:'+c['outcome']})
@@ -157,7 +165,10 @@ def bulk(db,user,org,body):
     ids=body.get('ids');changes=body.get('changes')
     if not isinstance(ids,list) or not 1<=len(ids)<=100 or any(not isinstance(i,str) for i in ids) or len(set(ids))!=len(ids):store.fail('Choose 1–100 unique records')
     if not isinstance(changes,dict) or not changes or set(changes)-{'owner','due_on'}:store.fail('Bulk changes support owner and due date')
-    if 'owner' in changes and not member(db,org,changes['owner']):store.fail('Choose an enabled organization owner')
+    if 'owner' in changes:
+        changes['owner']=store.bounded(changes['owner'],100)
+        if not member(db,org,changes['owner']):store.fail('Choose an enabled organization owner')
+    if 'due_on' in changes and changes['due_on'] is not None and not isinstance(changes['due_on'],str):store.fail('Use a valid due date')
     if changes.get('due_on'):
         try:date.fromisoformat(changes['due_on'])
         except (ValueError,TypeError):store.fail('Use a valid due date')
@@ -217,9 +228,12 @@ def package_preview(db,org,package):
     if not isinstance(p,dict) or digest(p)!=package['sha256'] or p.get('format')!='studio-workbench-v1' or p.get('organization_id')!=org:store.fail('Package hash, format or organization does not match')
     rs=p.get('records');ev=p.get('evidence')
     if not isinstance(rs,list) or len(rs)>MAX_RECORDS or not isinstance(ev,list) or len(ev)>2000:store.fail('Invalid package limits')
-    if len({r.get('id') for r in rs})!=len(rs):store.fail('Duplicate package record IDs')
+    if any(not isinstance(r,dict) or not isinstance(r.get('id'),str) or not isinstance(r.get('title'),str) or not isinstance(r.get('version'),int) for r in rs):store.fail('Invalid packaged record fields')
+    if not isinstance(p.get('scope'),str):store.fail('Package scope is missing')
+    if len({r['id'] for r in rs})!=len(rs):store.fail('Duplicate package record IDs')
     bytes_total=0
     for e in ev:
+        if not isinstance(e,dict) or not isinstance(e.get('content_base64'),str) or len(e['content_base64'])>14*1024*1024:store.fail('Invalid evidence entry')
         try:raw=base64.b64decode(e['content_base64'],validate=True)
         except (ValueError,KeyError,TypeError):store.fail('Invalid evidence encoding')
         bytes_total+=len(raw)

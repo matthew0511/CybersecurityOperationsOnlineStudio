@@ -6,6 +6,7 @@ from .store import fail,uid,history
 from ..database import service
 
 TEMPLATES={
+ 'assurance':dict(title='Security assurance and board follow-through',sections=['summary']),
  'operations':dict(title='Operational assurance and investment review',sections=['summary']),
  'ai_governance':dict(title='AI governance board oversight',sections=['summary']),
  'executive':dict(title='Executive overview',sections=['summary','risks','tasks','vendors']),
@@ -65,7 +66,7 @@ def freeze(db,user,org,body):
     if not isinstance(template,str) or not isinstance(format,str) or template not in TEMPLATES or format not in MIMES:fail('Choose a supported report template and format')
     from ..experience import report_payload,render_custom_report
     settings={**body,'sections':body.get('sections') or TEMPLATES[template]['sections']}
-    payload=report_payload(db,org,{**settings,'sections':['summary']} if template in {'ai_governance','operations'} else settings)
+    payload=report_payload(db,org,{**settings,'sections':['summary']} if template in {'ai_governance','operations','assurance'} else settings)
     if template=='ai_governance':
         from .ai_governance import overview
         state=overview(db,user,org)
@@ -76,6 +77,11 @@ def freeze(db,user,org,body):
         state=summary(db,user,org)
         payload['sections']={'Validation':state['checks'],'Evidence follow-ups':state['evidence_due'],'Exceptions':state['exceptions'],'Investment scenarios':state['scenarios']}
         payload['period_note']='Current operational snapshot as of export. '+state['note']
+    if template=='assurance':
+        from .assurance import overview,records
+        state=overview(db,user,org)
+        payload['sections']={'Control confidence':state['control_coverage']['rows'],'Service coverage':state['service_coverage']['rows'],'Data quality':state['quality'],'Metrics':state['metrics'],'Evidence reuse':state['evidence_reuse'],'Release readiness':state['releases'],'Board decisions':[{'title':r['title'],'owner':r['owner'],'due_on':r['due_on'],**{k:v for k,v in r['data'].items() if k not in {'evidence_ids','calculated'}}} for r in records(db,org) if r['kind']=='as_decision']}
+        payload['period_note']='Current assurance snapshot. Explicit inventory denominators and Unknown states are preserved; management records are not certification.'
     payload['report_title']=TEMPLATES[template]['title'];brand=service(db).report_branding(org)
     if any(len(rows)>2000 for rows in payload['sections'].values()):fail('Narrow the period or selected sections to at most 2000 records per section')
     content=powerpoint(payload,brand) if format=='pptx' else render_custom_report(db,org,payload,format,brand)

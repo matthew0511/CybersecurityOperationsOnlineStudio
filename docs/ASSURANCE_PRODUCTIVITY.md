@@ -10,7 +10,7 @@ The latest request asks for fifteen additions. The preceding recommendation cont
 
 | # | Capability | Operating surface / implementation |
 |---|---|---|
-| 1 | My Work Today | Assigned program work, pending independent approvals, failed/unknown checks and evidence follow-ups; direct source links |
+| 1 | My Work Today | Assigned program and legacy task/vendor/assessment/finding/change work, pending independent approvals, failed/unknown checks and evidence follow-ups; direct source links |
 | 2 | Data quality | Missing or unavailable owners, possible duplicate titles, required fields and unavailable typed references |
 | 3 | Control coverage and confidence | Inventoried-control denominator, current recorded validation and verified/failed/unknown outcomes |
 | 4 | Notification delivery assurance | Actual job states, provider-acceptance distinction, owner acknowledgment, explicit failed-send retry and internal backup escalation |
@@ -112,3 +112,7 @@ A reset is permitted only with a `pl_demo` marker. Preview binds the current pro
 - `tests/experience-ui.cjs`: real static interface with synthetic API responses, all assurance pages/register forms, mobile width and automated accessibility gate.
 
 Validation evidence will be appended after the candidate executes in the isolated build environment. Synthetic tests do not establish customer-provider consent, a real restore drill or independent legal/compliance assurance.
+
+## Branded assurance reporting
+
+Use **Freeze assurance report** to generate immutable PDF, Excel or PowerPoint editions containing control confidence, service coverage, data quality, configured metrics, evidence reuse, release readiness and board decisions. The source payload, branding, hash and generation actor are retained by the existing report-edition pipeline. Program Owner - Matthew Harris remains independent of customer branding.

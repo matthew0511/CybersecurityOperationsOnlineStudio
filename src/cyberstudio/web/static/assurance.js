@@ -1,6 +1,6 @@
 'use strict';
 const AS={tab:'My Work Today',state:null,groups:{'Detection engineering':['as_detection'],'Evidence reuse':['as_reuse'],'Service observations':['as_coverage'],'Board decisions':['as_decision'],'Release register':['as_release'],'Metrics register':['as_metric'],'Saved views register':['as_view'],'Delivery follow-up':['as_delivery'],'Onboarding progress':['as_onboarding']}};
-AS.open=async row=>{try{await P.showRecord(row);}catch(e){P.note(e.message,true);}};
+AS.open=async row=>{try{if(row.legacy_type)await XP.openRecord(row.legacy_type,row.id);else await P.showRecord(row);}catch(e){P.note(e.message,true);}};
 AS.result=(title,result)=>{const box=node('div');box.append(structured(result));return P.dialog(title,box);};
 AS.confirm=(title,preview,apply)=>{const content=node('div');content.append(structured(preview));const dialog=P.dialog(title,content);content.append(button('Apply reviewed changes',async()=>{try{const result=await apply();dialog.close();AS.result('Action completed',result);OPS.render();}catch(e){P.note(e.message,true);}},''));};
 AS.search=async box=>{
@@ -43,9 +43,9 @@ AS.delivery=async box=>{
 AS.render=async(box,clear=false)=>{
  if(clear)box.replaceChildren(node('h2','Assurance & productivity'));
  AS.state=await P.get('/assurance/overview');const titles=['My Work Today','Data quality','Control confidence','Service coverage','Framework versions','Search & saved views','Bulk program updates','Metric dashboard','Release readiness','Getting started',...Object.keys(AS.groups),...(P.catalog.role==='owner'?['Delivery assurance','Export & recovery']:[])];
- if(!titles.includes(AS.tab))AS.tab=titles[0];const label=node('label','Assurance page'),select=node('select');for(const title of titles)select.append(new Option(title,title));select.value=AS.tab;select.onchange=()=>{AS.tab=select.value;AS.render(box,true).catch(e=>P.note(e.message,true));};label.append(select);box.append(label);const content=node('div');box.append(content);
+ if(!titles.includes(AS.tab))AS.tab=titles[0];const label=node('label','Assurance page'),select=node('select');for(const title of titles)select.append(new Option(title,title));select.value=AS.tab;select.onchange=()=>{AS.tab=select.value;AS.render(box,true).catch(e=>P.note(e.message,true));};label.append(select);box.append(label);const content=node('div');box.append(button('Freeze assurance report',()=>P.form('Assurance report',{format:{label:'Format',type:'select',options:['pdf','xlsx','pptx'],required:true}},{format:'pdf'},async v=>{const result=await P.send('/editions',{...v,template:'assurance'}),links=node('div');links.append(P.link('Download frozen assurance report',result.download_url));P.dialog('Assurance report ready',links);}), 'secondary'),content);
  const s=AS.state;
- if(AS.groups[AS.tab]){const allowed=AS.groups[AS.tab];if(!allowed.includes(P.kind))P.kind=allowed[0];await P.modules(content);const field=content.querySelector('select[aria-label="Program module"]');for(const option of [...field.options])if(!allowed.includes(option.value))option.remove();field.setAttribute('aria-label','Assurance register');}
+ if(AS.groups[AS.tab]){if(AS.tab==='Evidence reuse'){content.append(node('h3','Current reuse eligibility'));P.table(content,s.evidence_reuse,['title','eligible','scope','period_start','period_end'],AS.open);}const allowed=AS.groups[AS.tab];if(!allowed.includes(P.kind))P.kind=allowed[0];await P.modules(content);const field=content.querySelector('select[aria-label="Program module"]');for(const option of [...field.options])if(!allowed.includes(option.value))option.remove();field.setAttribute('aria-label','Assurance register');}
  else if(AS.tab==='My Work Today'){content.append(node('p','Your assigned work, pending approvals, failed or unknown checks and evidence follow-ups.'));P.table(content,s.my_work,['title','reason','status','due_on','overdue'],AS.open);}
  else if(AS.tab==='Data quality')P.table(content,s.quality,['title','kind','owner','reason'],AS.open);
  else if(AS.tab==='Control confidence'){content.append(node('p','Verified '+(s.control_coverage.verified_percent??'Unknown')+'% · denominator '+s.control_coverage.denominator+' inventoried controls. Unknown controls remain in the denominator.'));P.table(content,s.control_coverage.rows,['title','state','checks','basis'],AS.open);}
@@ -59,3 +59,5 @@ AS.render=async(box,clear=false)=>{
  else if(AS.tab==='Delivery assurance')await AS.delivery(content);
  else if(AS.tab==='Export & recovery')await AS.package(content);
 };
+
+const asPreviousXPOpen=XP.openRecord;XP.openRecord=(kind,id)=>kind==='assurance'?AS.open({id}):asPreviousXPOpen(kind,id);

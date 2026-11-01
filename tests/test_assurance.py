@@ -66,6 +66,7 @@ def test_metrics_denominators_and_my_work(web):
     s=state(web,org);assert s['metrics'][0]['value']==0 and s['metrics'][0]['denominator']==1
     assert any(r['title']=='Assigned' and r['overdue'] for r in s['my_work'])
     assert s['quality']
+    report=post(web,org,'/editions',{'template':'assurance','format':'xlsx'});assert report['bytes']>100
 
 def test_catalog_compare_migrate_preserves_history(web):
     org,_=setup(web)
@@ -112,3 +113,12 @@ def test_notification_escalation_deduplication_and_ack(web):
     action(web,org,'acknowledge',{'job_id':'synthetic-job','note':'Reviewed failure'});assert state(web,org)['deliveries'][0]['acknowledged']
     action(web,org,'retry',{'job_id':'synthetic-job'},422)
     action(web,org,'retry',{'job_id':'synthetic-job','confirmed':True});assert state(web,org)['deliveries'][0]['delivery_state']=='queued'
+
+def test_malformed_packages_and_invalid_bulk_inputs_fail_closed(web):
+    org,_=setup(web)
+    for payload in [None,[],{}, {'format':'studio-workbench-v1','organization_id':org,'records':[None],'evidence':[]}, {'format':'studio-workbench-v1','organization_id':org,'records':[],'evidence':[False],'scope':'Synthetic'}]:
+        package={'payload':payload,'sha256':assurance.digest(payload)}
+        action(web,org,'recovery-preview',{'package':package},422)
+    r=save(web,org,'control')
+    for changes in [{'owner':[]},{'due_on':[]},{'status':'approved'},{'owner':"'; DROP TABLE pl_records;--"}]:
+        action(web,org,'bulk',{'ids':[r['id']],'changes':changes},422)
