@@ -2,7 +2,7 @@
 
 Program Owner - Matthew Harris  
 Date: November 1, 2026, America/Chicago  
-Status: implementation candidate; validation and deployment evidence below will identify the accepted source.
+Status: validated application release; detailed source, build and deployment observations appear in ASSURANCE_VALIDATION.md.
 
 ## Scope and navigation
 
@@ -111,8 +111,16 @@ A reset is permitted only with a `pl_demo` marker. Preview binds the current pro
 - `tests/test_assurance.py`: tenant, role, version, integrity, migration, state and calculation acceptance.
 - `tests/experience-ui.cjs`: real static interface with synthetic API responses, all assurance pages/register forms, mobile width and automated accessibility gate.
 
-Validation evidence will be appended after the candidate executes in the isolated build environment. Synthetic tests do not establish customer-provider consent, a real restore drill or independent legal/compliance assurance.
+Validation evidence is recorded in [ASSURANCE_VALIDATION.md](ASSURANCE_VALIDATION.md). Synthetic tests do not establish customer-provider consent, a real restore drill or independent legal/compliance assurance.
 
 ## Branded assurance reporting
 
 Use **Freeze assurance report** to generate immutable PDF, Excel or PowerPoint editions containing control confidence, service coverage, data quality, configured metrics, evidence reuse, release readiness and board decisions. The source payload, branding, hash and generation actor are retained by the existing report-edition pipeline. Program Owner - Matthew Harris remains independent of customer branding.
+
+## Transport and recovery operating limits
+
+The existing HTTPS gateway also imposes its request/response size ceiling. The 10 MiB decoded-evidence limit is an application upper bound, not a guarantee that every encoded package fits that gateway. Base64 expansion and record/catalog metadata add size. Large workspaces should use the managed database recovery process. Archived-record recovery deliberately preserves current stored contents and does not replay uploaded evidence or approvals.
+
+## Accepted release
+
+Runtime source `6a89522c234b315a21912650e7016c7e0b7e9a26` is deployed as ECS task definition `cyber-ops-online-studio-web:15`. At November 1, 2026, 15:28:22 CST, rollout was COMPLETED with two running tasks, no pending/failed tasks and two healthy targets. The unchanged backend passed 128 tests; seven interface tests, browser/mobile/accessibility acceptance, security checks and container smoke validation passed. See [release evidence](ASSURANCE_VALIDATION.md) for the precise validation-source boundaries and image digest.
