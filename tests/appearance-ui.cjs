@@ -11,7 +11,7 @@ async function serve(context){await context.route('**/*',async route=>{
  return route.fulfill({status:200,contentType:file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':'text/html',body:fs.readFileSync(full)});
 });}
 (async()=>{
- const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+ const browser=await chromium.launch({headless:true,args:['--no-sandbox'],...(process.env.STUDIO_CHROMIUM_PATH?{executablePath:process.env.STUDIO_CHROMIUM_PATH}:{} )});
  try{
   const context=await browser.newContext({colorScheme:'dark',viewport:{width:1440,height:1000}});await serve(context);
   const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));

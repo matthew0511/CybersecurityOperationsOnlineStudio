@@ -60,7 +60,7 @@ Create assets and prerequisite dependencies first. An `op_link` attaches a busin
 
 ## Access review campaign runbook
 
-Create `op_campaign` with a scope, inventory-source reference, review date and enabled organization reviewer. The assigned reviewer opens it and imports a JSON array of 1–1000 account objects:
+Create `op_campaign` with a scope, inventory-source reference, review date and enabled organization reviewer. The assigned reviewer opens it and uses the CSV wizard to map and preview 1–1000 rows. The API retains this object shape:
 
 ```json
 [{"account":"synthetic.user","system":"Synthetic directory","privileged":false,"last_seen":"2026-10-01"}]
@@ -354,3 +354,8 @@ Final application validation and browser results are recorded below. A combined 
 Static full-web Bandit and dependency vulnerability audit passed. Existing deterministic fuzz/SQL/tenant-boundary tests are included in the full backend suite. Browser acceptance uses synthetic API responses against real application HTML/JavaScript/CSS; it is separate from the PostgreSQL-backed endpoint tests. No live customer integration or real restore drill is asserted. Test-client deprecation warnings are retained as non-failing observations.
 
 Release boundary: real provider consent, imported inventories, reviewer/assignee selection, workflow activation, business recovery objectives and evidence collection remain organization configuration tasks. The application never performs an external access removal, arbitrary shell action, cryptographic migration or external notification merely because a record exists.
+
+
+## Cosmetic presentation extension
+
+See [COSMETIC_REFINEMENTS.md](COSMETIC_REFINEMENTS.md). The CSV wizard and grouped navigation preserve the existing import and authorization contracts.

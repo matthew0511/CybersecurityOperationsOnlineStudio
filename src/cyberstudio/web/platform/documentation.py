@@ -113,6 +113,13 @@ GUIDES.append(('assurance','Assurance and productivity — fifteen additions',[
 'All functions retain sessions, CSRF, organization membership, capability restrictions, row-level policies, optimistic versions and immutable history. Export/recovery, demonstration reset and delivery operations are installation-owner restricted. No schema migration is required: additive typed records use pl_records and pl_history; escalation claims use pl_schedule_runs.'
 ]))
 
+GUIDES.append(('cosmetic-refinements','Interface layout and CSV inventory import',[
+'Operations workbench groups its secondary pages under Assurance, Governance, Resilience and Planning. Overview remains the summary. Select a category and then its Section dropdown; the owner-only integration health page keeps its existing permission boundary.',
+'Open an access campaign and choose Import account inventory. Select a UTF-8 CSV up to 2 MiB and 1,000 account rows, map Account and System plus optional Privileged access and Last use columns, then review the first ten rows before importing. Privileged access accepts true/false, yes/no or 1/0. Last use accepts YYYY-MM-DD. If no privileged column is mapped it defaults to No; an unmapped last-use date remains unknown. The server still checks organization, reviewer, versions, duplicates and field validity.',
+'Record drawers present labeled sections, related-record links and an authenticated history timeline. Technical details remain expandable. Forms group basics, scope, ownership/review and evidence/validation with consistent Save changes and Cancel actions. Archive actions live under More actions, retaining the existing recycle-bin and evidence-hold rules.',
+'Mobile labels use readable minimum sizes, dashboard cards share spacing and typography, status badges include explicit text, numeric table columns align consistently, and empty module views explain the next step. Customer branding leads the workspace header. Program Owner - Matthew Harris remains fixed and visible in the header and footer. These presentation changes do not relax authentication, approvals or tenant scope.'
+]))
+
 def documentation():
     registry=features()
     for item in registry:

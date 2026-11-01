@@ -257,3 +257,8 @@ See [OPERATIONS_WORKBENCH.md](OPERATIONS_WORKBENCH.md) for the fifteen additions
 ## Assurance and productivity extension — November 1, 2026
 
 Open **Operations workbench → Assurance & productivity** for My Work Today, data quality, coverage/confidence, delivery follow-up, framework-version comparison, evidence reuse, detection engineering, service coverage, package recovery, role onboarding, board follow-through, release readiness, saved views, bulk owner/due changes and metrics. See [the technical guide](ASSURANCE_PRODUCTIVITY.md) for field semantics, security boundaries, package scope and validation evidence.
+
+
+## Cosmetic refinements
+
+See [COSMETIC_REFINEMENTS.md](COSMETIC_REFINEMENTS.md) for grouped navigation, CSV import, mobile readability, forms, tables and validation. The approved release preserves the newer assurance and productivity additions.

@@ -206,3 +206,8 @@ The November 1 security release adds bounded raw request handling, strict typed 
 ## Operations workbench
 
 The fifteen additions are documented in [Operations workbench technical guide](docs/OPERATIONS_WORKBENCH.md). Open Operations workbench for validation, evidence, exceptions and investment summaries; secondary pages contain detailed registers. Source implementation is separate from deployment; consult release evidence for test, image and runtime provenance.
+
+
+## Cosmetic refinements
+
+See [COSMETIC_REFINEMENTS.md](docs/COSMETIC_REFINEMENTS.md) for grouped navigation, CSV import, mobile readability, forms, tables and validation. The approved release preserves the newer assurance and productivity additions.

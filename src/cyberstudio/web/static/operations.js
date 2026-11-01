@@ -55,7 +55,7 @@ OPS.render=async()=>{
   if(!org){host.append(node('p','Choose an organization to manage operations.'));return;}
   P.catalog=await api('/api/platform/catalog');OPS.state=await P.get('/operations/overview');const tabs=node('div',undefined,'pl-tabs');tabs.setAttribute('aria-label','Operations secondary pages');
   const titles=['Overview','Assurance & productivity',...Object.keys(OPS.groups),'Customer & auditor portal',...(P.catalog.role==='owner'?['Integration health']:[]),'Automation history'];if(!titles.includes(OPS.tab))OPS.tab='Overview';
-  for(const title of titles){const b=button(title,()=>{OPS.tab=title;OPS.render();},OPS.tab===title?'':'secondary');b.setAttribute('aria-pressed',String(OPS.tab===title));tabs.append(b);}host.append(tabs);const box=P.box(OPS.tab);host.append(box);
+  if(OPS.navigation)OPS.navigation(host,P.catalog.role);else{for(const title of titles){const b=button(title,()=>{OPS.tab=title;OPS.render();},OPS.tab===title?'':'secondary');b.setAttribute('aria-pressed',String(OPS.tab===title));tabs.append(b);}host.append(tabs);}const box=P.box(OPS.tab);host.append(box);
   if(OPS.tab==='Overview')await OPS.overview(box);
   else if(OPS.tab==='Assurance & productivity')await AS.render(box);
   else if(OPS.groups[OPS.tab])await OPS.registers(box);
