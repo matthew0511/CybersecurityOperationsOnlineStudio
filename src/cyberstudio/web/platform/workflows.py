@@ -57,7 +57,7 @@ def step(db,user,org,run_id,body):
     if not row:fail('Execution not found',404)
     if body.get('version')!=row['version']:fail('Execution changed; reload before updating',409)
     index=body.get('index');status=body.get('status');steps=row['steps']
-    if not isinstance(index,int) or isinstance(index,bool) or not 0<=index<len(steps) or status not in {'pending','in_progress','blocked','completed'}:fail('Choose a valid step and status')
+    if not isinstance(index,int) or isinstance(index,bool) or not 0<=index<len(steps) or status not in ('pending','in_progress','blocked','completed'):fail('Choose a valid step and status')
     if status=='completed' and any(v['status']!='completed' for v in steps[:index]):fail('Complete prior steps first',409)
     if status!='completed' and any(v['status']=='completed' for v in steps[index+1:]):fail('Reopen later steps before an earlier step',409)
     steps[index].update(status=status,notes=bounded(body.get('notes','')),completed_by=user['username'] if status=='completed' else '',completed_at=datetime.now(timezone.utc).isoformat() if status=='completed' else '')
@@ -110,13 +110,13 @@ def catalog_import(db,user,org,raw,name,edition,source,license_note,confirmed):
 
 def bulk(db,user,org,body):
     access(db,user,org,True,'tasks:write');ids=body.get('ids',[])
-    if not isinstance(ids,list) or not 1<=len(ids)<=100 or len(set(ids))!=len(ids):fail('Choose 1–100 unique remediation tasks')
+    if not isinstance(ids,list) or not 1<=len(ids)<=100 or not all(isinstance(v,str) for v in ids) or len(set(ids))!=len(ids):fail('Choose 1–100 unique remediation tasks')
     records=[reference(db,org,ident,'legacy:task') for ident in ids];changes=body.get('changes',{})
-    if not changes or set(changes)-{'owner','due_date','status'}:fail('Choose supported bulk fields')
-    if changes.get('status') and changes['status'] not in {'open','in_progress','blocked','done'}:fail('Invalid task status')
+    if not isinstance(changes,dict) or not changes or set(changes)-{'owner','due_date','status'}:fail('Choose supported bulk fields')
+    if 'status' in changes and changes['status'] not in ('open','in_progress','blocked','done'):fail('Invalid task status')
     if changes.get('due_date'):
         try:date.fromisoformat(changes['due_date'])
-        except ValueError:fail('Use a valid due date')
+        except (ValueError,TypeError):fail('Use a valid due date')
     digest=hashlib.sha256(json.dumps({'records':records,'changes':changes},sort_keys=True,default=str).encode()).hexdigest()
     if not body.get('confirmed'):return {'preview':records,'changes':changes,'confirmation_hash':digest}
     if body.get('confirmation_hash')!=digest:fail('Records changed since preview; review again',409)
@@ -128,3 +128,4 @@ def bulk(db,user,org,body):
         if 'due_date' in changes:db.execute('UPDATE remediation_tasks SET due_date=%s WHERE organization_id=%s AND id=%s',(changes['due_date'],org,record['id']))
         history(db,org,record['id'],user['username'],'task:bulk_updated',{'changes':changes,'confirmation_hash':digest})
     return {'updated':len(records)}
+

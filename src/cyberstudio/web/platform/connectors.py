@@ -20,6 +20,7 @@ PROVIDERS={
 
 
 def validate_config(provider,config,secrets_):
+    if not isinstance(provider,str):fail('Choose a supported integration provider')
     definition=PROVIDERS.get(provider)
     if not definition:fail('Unsupported integration provider')
     if not isinstance(config,dict) or set(config)-set(definition['fields']):fail('Unsupported provider configuration')
@@ -48,6 +49,8 @@ def save(db,user,org,body):
     from ..experience import require_owner
     from .store import access
     access(db,user,org,True,'integrations:manage');require_owner(user)
+    bounded(body.get('id',''),100)
+    if not isinstance(body.get('credentials',{}),dict):fail('Credentials must be an object')
     previous=db.execute('SELECT * FROM pl_integrations WHERE organization_id=%s AND id=%s',(org,body.get('id',''))).fetchone()
     if body.get('id') and not previous:fail('Integration not found',404)
     provider=body.get('provider')
@@ -159,3 +162,4 @@ def stage(db,row,items):
         digest=hashlib.sha256(data.encode()).hexdigest()
         db.execute('INSERT INTO pl_external(organization_id,integration_id,external_id,payload,source_hash) VALUES (%s,%s,%s,%s::jsonb,%s) ON CONFLICT(organization_id,integration_id,external_id) DO UPDATE SET payload=EXCLUDED.payload,promoted_id=CASE WHEN pl_external.source_hash=EXCLUDED.source_hash THEN pl_external.promoted_id ELSE NULL END,source_hash=EXCLUDED.source_hash,updated_at=CURRENT_TIMESTAMP',(row['organization_id'],row['id'],ext,data,digest));staged+=1
     return staged
+

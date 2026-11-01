@@ -90,7 +90,8 @@ class Database:
             trigger = re.fullmatch(r"CREATE TRIGGER IF NOT EXISTS (\w+) BEFORE (UPDATE|DELETE) ON (\w+)\s*BEGIN SELECT RAISE\(ABORT,\s*'[^']+'\); END;", statement, re.I | re.S)
             if trigger:
                 name, event, table = trigger.groups()
-                self.raw.execute(f'CREATE OR REPLACE TRIGGER {name} BEFORE {event} ON {table} FOR EACH ROW EXECUTE FUNCTION reject_history_change()')
+                from psycopg import sql
+                self.raw.execute(sql.SQL('CREATE OR REPLACE TRIGGER {} BEFORE {} ON {} FOR EACH ROW EXECUTE FUNCTION reject_history_change()').format(sql.Identifier(name),sql.SQL(event),sql.Identifier(table)))
             else:
                 statement = re.sub(r'\bBLOB\b', 'BYTEA', statement)
                 statement = re.sub(r'\bREAL\b', 'DOUBLE PRECISION', statement)
@@ -176,3 +177,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

@@ -13,6 +13,7 @@ import tempfile
 import time
 import typing
 
+from .request_security import RequestBoundary, safe_compare
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError
 from fastapi import FastAPI, HTTPException, Request
@@ -75,15 +76,9 @@ def now():
 
 @app.middleware('http')
 async def headers(request, call_next):
-    if int(request.headers.get('content-length', '0') or '0') > 7 * 1024 * 1024:
-        return JSONResponse({'detail': 'Request exceeds 7 MiB'}, status_code=413)
+    from .request_security import SECURITY_HEADERS
     response = await call_next(request)
-    response.headers.update({
-        'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
-        'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer',
-        'Strict-Transport-Security': 'max-age=31536000',
-        'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
-        'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'})
+    response.headers.update(SECURITY_HEADERS)
     return response
 
 
@@ -113,7 +108,7 @@ def principal(db, request, *, write=False):
     row = db.execute('SELECT s.*,u.role FROM web_sessions s JOIN web_users u ON u.username=s.username WHERE s.token_hash=%s AND s.expires_at>%s AND u.enabled', (digest(token), now())).fetchone()
     if not row:
         raise HTTPException(401, 'Sign in required')
-    if write and not hmac.compare_digest(request.headers.get('x-csrf-token', ''), row['csrf']):
+    if write and not safe_compare(request.headers.get('x-csrf-token', ''), row['csrf']):
         raise HTTPException(403, 'Refresh your session and retry')
     from .platform.security import enrollment_required
     if enrollment_required(db,row['username']) and not (request.url.path.startswith('/api/security') or request.url.path in {'/api/me','/api/logout'}):
@@ -163,7 +158,7 @@ def setup(body: dict, request: Request):
             if db.execute('SELECT 1 FROM web_users LIMIT 1').fetchone():
                 raise HTTPException(409, 'Owner account already configured')
             expected = os.environ.get('SETUP_TOKEN', '')
-            if not expected or not hmac.compare_digest(str(body.get('code', '')), expected):
+            if not expected or not safe_compare(str(body.get('code', '')), expected):
                 raise HTTPException(403, 'Invalid setup code')
             username, password = str(body.get('username', '')).lower(), str(body.get('password', ''))
             if not re.fullmatch(r'[a-z0-9_.@-]{3,100}', username) or not 16 <= len(password) <= 256:
@@ -428,3 +423,7 @@ def home():
 @app.exception_handler(__import__('httpx').HTTPError)
 async def provider_unavailable(request,exc):
     return JSONResponse({'detail':'The identity or integration provider is unavailable. Retry later; no provider response bodies or credentials are exposed.'},status_code=503)
+
+
+# Outer ASGI guard runs before JSON, multipart, database or response middleware.
+app.add_middleware(RequestBoundary)

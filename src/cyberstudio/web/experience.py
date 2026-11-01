@@ -1,3 +1,4 @@
+from .request_security import safe_compare
 """Organization-scoped collaboration, questionnaire workflow and experience services."""
 from datetime import date, datetime, timedelta, timezone
 from hashlib import sha256
@@ -80,9 +81,11 @@ def authorize(db,user,org,write=False,operation=''):
 
 
 def record(db,org,kind,ident):
+    if not isinstance(kind,str) or not isinstance(ident,str):raise HTTPException(422,'Record type and identifier must be text')
     table=TABLES.get(kind)
     if not table:raise HTTPException(422,'Unsupported record type')
-    row=db.execute(f'SELECT * FROM {table} WHERE organization_id=%s AND id=%s',(org,ident)).fetchone()
+    from psycopg import sql
+    row=db.execute(sql.SQL('SELECT * FROM {} WHERE organization_id=%s AND id=%s').format(sql.Identifier(table)),(org,ident)).fetchone()
     if not row:raise HTTPException(404,'Record not found in this organization')
     return dict(row)
 
@@ -243,7 +246,10 @@ def search(org:str,request:Request,q:str=''):
         if len(needle)<2:return {'results':[]}
         for kind,table in TABLES.items():
             # Search only explicit display fields; no evidence bytes or credentials.
-            for row in db.execute(f'SELECT id,title FROM {table} WHERE organization_id=%s' if kind!='vendor' else 'SELECT id,name AS title FROM vendors WHERE organization_id=%s',(org,)).fetchall():
+            from psycopg import sql
+            field='name' if kind=='vendor' else 'title'
+            query=sql.SQL('SELECT id,{} AS title FROM {} WHERE organization_id=%s').format(sql.Identifier(field),sql.Identifier(table))
+            for row in db.execute(query,(org,)).fetchall():
                 if needle in row['title'].casefold():results.append({'type':kind,**dict(row)})
         return {'results':results[:100]}
 
@@ -256,7 +262,7 @@ def mutate(org:str,action:str,body:dict,request:Request):
         username=user['username'];svc=service(db);result={}
         if action=='preferences':
             prefs={k:v for k,v in body.items() if k in {'theme','widgets','onboarding_dismissed','last_questionnaire','last_question'}}
-            if 'theme' in prefs and prefs['theme'] not in {'light','dark','system'}:raise HTTPException(422,'Invalid theme')
+            if 'theme' in prefs and prefs['theme'] not in ('light','dark','system'):raise HTTPException(422,'Invalid theme')
             if 'widgets' in prefs and (not isinstance(prefs['widgets'],list) or len(prefs['widgets'])>20 or any(not isinstance(x,str) or len(x)>60 for x in prefs['widgets'])):raise HTTPException(422,'Invalid widgets')
             if len(json.dumps(prefs))>4000:raise HTTPException(422,'Preferences too long')
             db.execute('INSERT INTO xp_preferences VALUES (%s,%s,%s::jsonb) ON CONFLICT(username,organization_id) DO UPDATE SET settings=xp_preferences.settings||EXCLUDED.settings',(username,org,json.dumps(prefs)))
@@ -266,8 +272,8 @@ def mutate(org:str,action:str,body:dict,request:Request):
                 if key in body:cfg[key]=body[key]
             for key in ['brand_name','report_footer']:
                 if key in cfg:cfg[key]=text(cfg[key],250)
-            if not re.fullmatch(r'#[0-9a-fA-F]{6}',cfg.get('accent','#097f7a')):raise HTTPException(422,'Use a six-digit hex accent color')
-            if cfg.get('reminder_frequency','daily') not in {'daily','weekly'}:raise HTTPException(422,'Choose daily or weekly')
+            if not isinstance(cfg.get('accent','#097f7a'),str) or not re.fullmatch(r'#[0-9a-fA-F]{6}',cfg.get('accent','#097f7a')):raise HTTPException(422,'Use a six-digit hex accent color')
+            if cfg.get('reminder_frequency','daily') not in ('daily','weekly'):raise HTTPException(422,'Choose daily or weekly')
             if not isinstance(cfg.get('reminders_enabled',True),bool):raise HTTPException(422,'Reminder setting must be boolean')
             for key in ['reminder_lead_days','escalation_days']:
                 if not isinstance(cfg.get(key,7),int) or isinstance(cfg.get(key,7),bool) or not 0<=cfg.get(key,7)<=90:raise HTTPException(422,'Reminder days must be 0–90')
@@ -286,7 +292,7 @@ def mutate(org:str,action:str,body:dict,request:Request):
         elif action=='review':
             aid=body.get('assessment','');state=meta(db,org,aid);decision=body.get('state');notes=text(body.get('notes',''))
             if decision!='submitted' and role!='owner' and state['reviewer']!=username:raise HTTPException(403,'Only the assigned reviewer or owner may review this questionnaire')
-            if decision not in {'submitted','needs_changes','approved','draft'}:raise HTTPException(422,'Unsupported review state')
+            if decision not in ('submitted','needs_changes','approved','draft'):raise HTTPException(422,'Unsupported review state')
             if decision in {'submitted','approved'} and review_summary(db,org,aid)['unanswered']:raise HTTPException(422,'Complete the applicable questions first')
             if decision=='submitted' and state['state'] not in {'draft','needs_changes'}:raise HTTPException(409,'Reopen before resubmitting')
             if decision=='approved' and state['state']!='submitted':raise HTTPException(409,'Submit before approving')
@@ -325,7 +331,7 @@ def mutate(org:str,action:str,body:dict,request:Request):
         elif action=='run_reminders':require_owner(user);tick(db)
         elif action=='invite':
             require_owner(user);kind=body.get('kind');aid=body.get('assessment') or None;uname=text(body.get('username',''),100).lower();member_role=body.get('role','viewer')
-            if kind not in {'team','vendor'} or member_role not in {'editor','reviewer','viewer'}:raise HTTPException(422,'Invalid invitation type or role')
+            if kind not in ('team','vendor') or member_role not in ('editor','reviewer','viewer'):raise HTTPException(422,'Invalid invitation type or role')
             if kind=='vendor':
                 record(db,org,'assessment',aid)
                 if not all(q['code'].startswith('TPR-') for q in svc.questions(org,aid)):raise HTTPException(422,'Vendor portal supports the default third-party questionnaire')
@@ -339,7 +345,7 @@ def mutate(org:str,action:str,body:dict,request:Request):
             require_owner(user);db.execute('UPDATE xp_invites SET revoked=TRUE WHERE token_hash=%s AND organization_id=%s',(body.get('id',''),org))
         elif action=='membership':
             require_owner(user);uname=text(body.get('username',''),100);member_role=body.get('role')
-            if member_role not in {'editor','reviewer','viewer','remove'}:raise HTTPException(422,'Invalid role')
+            if member_role not in ('editor','reviewer','viewer','remove'):raise HTTPException(422,'Invalid role')
             target=db.execute("SELECT username FROM web_users WHERE username=%s AND role<>'owner'",(uname,)).fetchone()
             if not target:raise HTTPException(422,'Select a non-owner account')
             if member_role=='remove':db.execute('DELETE FROM xp_memberships WHERE username=%s AND organization_id=%s',(uname,org))
@@ -386,7 +392,7 @@ def vendor_session(db,request,write=False):
     import hmac
     r=db.execute('SELECT s.*,i.organization_id,i.assessment_id FROM xp_vendor_sessions s JOIN xp_invites i ON i.token_hash=s.invite_hash WHERE s.token_hash=%s AND s.expires_at>%s AND i.expires_at>%s AND NOT i.revoked',(hash_token(request.cookies.get(VCOOKIE,'')),epoch(),epoch())).fetchone()
     if not r:raise HTTPException(401,'Invitation session expired or revoked')
-    if write and not hmac.compare_digest(request.headers.get('x-csrf-token',''),r['csrf']):raise HTTPException(403,'Refresh this invitation session')
+    if write and not safe_compare(request.headers.get('x-csrf-token',''),r['csrf']):raise HTTPException(403,'Refresh this invitation session')
     from .platform.schema import system_actor
     system_actor(db,r['organization_id'])
     return r
@@ -474,7 +480,7 @@ def report_payload(db,org,body):
     if start and end and start>end:raise HTTPException(422,'Report end must follow its start')
     selected=body.get('sections',['summary','risks','tasks','vendors','frameworks'])
     allowed={'summary','risks','tasks','vendors','frameworks','findings','history'}
-    if not isinstance(selected,list) or not selected or any(s not in allowed for s in selected):raise HTTPException(422,'Select supported report sections')
+    if not isinstance(selected,list) or not selected or any(not isinstance(s,str) or s not in allowed for s in selected):raise HTTPException(422,'Select supported report sections')
     svc=service(db);sections={};cfg=settings(db,org)
     sources={'risks':svc.list_risks,'tasks':svc.list_tasks,'vendors':svc.vendors,'frameworks':svc.implementations,'findings':svc.findings}
     for key in selected:
@@ -534,4 +540,5 @@ def render_custom_report(db,org,payload,format,brand):
             for row in items:sheet.append([_safe_excel(str(row.get(c,''))) for c in columns])
         style_workbook(wb,summary_header=1,brand=brand);ws.row_dimensions[4].height=90;wb.save(target)
     return target.getvalue()
+
 

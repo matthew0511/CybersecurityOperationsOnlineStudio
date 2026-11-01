@@ -1,3 +1,4 @@
+from ..request_security import safe_compare
 """One-use, expiring external audit rooms; never a normal workspace session."""
 import secrets,time,json,hmac
 from fastapi import APIRouter,Request
@@ -26,7 +27,8 @@ def create(org:str,body:dict,request:Request):
         if not isinstance(allowed,list) or not 1<=len(allowed)<=100 or isinstance(days,bool) or not isinstance(days,int) or not 1<=days<=30:fail('Choose 1–100 records and a 1–30 day lifetime')
         normalized=[]
         for entry in allowed:
-            kind=entry.get('kind');ident=entry.get('id')
+            if not isinstance(entry,dict) or set(entry)-{'kind','id'} or not isinstance(entry.get('kind'),str) or not isinstance(entry.get('id'),str):fail('Choose a typed audit-room record')
+            kind=entry['kind'];ident=bounded(entry['id'],100)
             if kind=='program':get(db,org,ident)
             elif kind=='edition':
                 if not db.execute('SELECT 1 FROM pl_editions WHERE organization_id=%s AND id=%s',(org,ident)).fetchone():fail('Report edition not found',404)
@@ -42,7 +44,7 @@ def auditor(db,request,write=False):
     token=request.cookies.get(COOKIE,'')
     row=db.execute('SELECT s.*,r.organization_id,r.title,r.allowed,r.revoked,r.expires_at AS room_expires FROM pl_auditor_sessions s JOIN pl_rooms r ON r.id=s.room_id WHERE s.token_hash=%s AND s.expires_at>%s',(HASH(token),int(time.time()))).fetchone()
     if not row or row['revoked'] or row['room_expires']<=int(time.time()):fail('Audit access expired or was revoked',401)
-    if write and not hmac.compare_digest(request.headers.get('x-csrf-token',''),row['csrf']):fail('Refresh the audit-room session',403)
+    if write and not safe_compare(request.headers.get('x-csrf-token',''),row['csrf']):fail('Refresh the audit-room session',403)
     system_actor(db,row['organization_id']);return row
 
 @router.post('/api/audit-room/redeem')
@@ -95,3 +97,4 @@ def download(kind:str,ident:str,request:Request):
             content=bytes(row['content']);mime=MIMES[row['format']];filename='report.'+row['format']
         else:fail('Only selected evidence and frozen reports can be downloaded')
         return Response(content,media_type=mime,headers={'Content-Disposition':'attachment; filename="'+filename+'"'})
+

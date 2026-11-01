@@ -24,6 +24,7 @@ def access(db,user,org,write=False,capability='records:write'):
     return role
 
 def get(db,org,ident,kind=None,deleted=False,lock=False):
+    ident=bounded(ident,100)
     query='SELECT * FROM pl_records WHERE organization_id=%s AND id=%s AND (%s OR deleted_at IS NULL) FOR UPDATE' if lock else 'SELECT * FROM pl_records WHERE organization_id=%s AND id=%s AND (%s OR deleted_at IS NULL)'
     row=db.execute(query,(org,ident,deleted)).fetchone()
     if not row or kind and row['kind']!=kind:fail('Record not found in this organization',404)
@@ -114,13 +115,21 @@ def validate(db,org,kind,data):
     return result
 
 def validate_rules(rules):
-    edges={}
+    # Kahn traversal visits each edge once; shared DAG paths are not re-walked.
+    edges={};indegree={}
     for rule in rules:
-        edges.setdefault(rule['parent'],[]).append(rule['child'])
-    def visit(node,path):
-        if node in path:fail('Conditional rules cannot contain a cycle')
-        for child in edges.get(node,[]):visit(child,path|{node})
-    for node in edges:visit(node,set())
+        parent,child=rule['parent'],rule['child']
+        edges.setdefault(parent,set())
+        indegree.setdefault(parent,0);indegree.setdefault(child,0)
+        if child not in edges[parent]:
+            edges[parent].add(child);indegree[child]+=1
+    pending=[node for node,n in indegree.items() if n==0];visited=0
+    while pending:
+        node=pending.pop();visited+=1
+        for child in edges.get(node,()):
+            indegree[child]-=1
+            if indegree[child]==0:pending.append(child)
+    if visited!=len(indegree):fail('Conditional rules cannot contain a cycle')
 
 def require_verified_evidence(db,org,ids):
     from ..database import service
@@ -135,6 +144,8 @@ def history(db,org,ident,username,action,snapshot):
 
 def save(db,user,org,kind,body):
     access(db,user,org,True)
+    if body.get('id') is not None:bounded(body['id'],100)
+    if 'version' in body and (isinstance(body['version'],bool) or not isinstance(body['version'],int) or body['version']<1):fail('Version must be a positive integer')
     ident=body.get('id') or uid();previous=get(db,org,ident,kind,lock=True) if body.get('id') else None
     if previous and previous['status'] not in {'draft','in_progress'} and kind in APPROVAL_KINDS:fail('Reopen the reviewed version before editing',409)
     if previous and body.get('version')!=previous['version']:fail('This record changed. Reload and reconcile your edit.',409)
@@ -148,11 +159,16 @@ def save(db,user,org,kind,body):
     data=validate(db,org,kind,body.get('data',{}))
     if kind in {'site','asset'}:
         refs=[data['parent_id']] if kind=='site' and data.get('parent_id') else data.get('dependencies',[]) if kind=='asset' else []
-        def walk(node,path):
-            if node==ident or node in path:fail('Office / asset dependencies cannot contain a cycle')
+        seen=set();visiting=set();pending=[(node,False) for node in refs]
+        while pending:
+            node,leaving=pending.pop()
+            if leaving:visiting.remove(node);seen.add(node);continue
+            if node==ident or node in visiting:fail('Office / asset dependencies cannot contain a cycle')
+            if node in seen:continue
+            if len(seen)+len(visiting)>=10000:fail('Dependency graph exceeds the validation limit')
+            visiting.add(node);pending.append((node,True))
             item=get(db,org,node,kind);nexts=[item['data']['parent_id']] if kind=='site' and item['data'].get('parent_id') else item['data'].get('dependencies',[]) if kind=='asset' else []
-            for child in nexts:walk(child,path|{node})
-        for node in refs:walk(node,set())
+            pending.extend((child,False) for child in nexts)
     if kind=='delegation' and user['role']!='owner' and data.get('from_user')!=user['username']:fail('You can delegate only your own responsibilities',403)
     status=previous['status'] if previous else 'draft'
     db.execute('''INSERT INTO pl_records(id,organization_id,kind,title,status,owner,due_on,data,created_by,updated_by) VALUES (%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s)
@@ -161,10 +177,10 @@ def save(db,user,org,kind,body):
     return record
 
 def transition(db,user,org,ident,body):
-    access(db,user,org,True,'records:approve' if body.get('status') in {'approved','rejected'} else 'records:write')
+    access(db,user,org,True,'records:approve' if body.get('status') in ('approved','rejected') else 'records:write')
     record=get(db,org,ident,lock=True)
     if body.get('version')!=record['version']:fail('Record changed; reload before changing its status',409)
-    status=body.get('status');old=record['status']
+    status=bounded(body.get('status',''),50);old=record['status']
     if status not in STATUSES:fail('Choose a valid status')
     transitions={'draft':{'in_progress','submitted','active','closed'},'in_progress':{'submitted','completed','closed'},'submitted':{'approved','rejected','draft'},'approved':{'active','closed','draft'},'active':{'completed','closed','draft'},'completed':{'draft','closed'},'rejected':{'draft'},'closed':{'draft'}}
     if status not in transitions.get(old,set()):fail('This status transition is not permitted',409)
@@ -189,3 +205,4 @@ def transition(db,user,org,ident,body):
         if status=='draft':data={k:v for k,v in data.items() if k not in {'approved_by','approved_at','approval_version'}}
     db.execute('UPDATE pl_records SET status=%s,data=%s::jsonb,version=version+1,updated_by=%s,updated_at=CURRENT_TIMESTAMP WHERE organization_id=%s AND id=%s',(status,json.dumps(data),user['username'],org,ident))
     updated=get(db,org,ident);history(db,org,ident,user['username'],'status:'+status,updated);return updated
+
