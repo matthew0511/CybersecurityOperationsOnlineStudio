@@ -29,10 +29,17 @@ def create(org:str,body:dict,request:Request):
         for entry in allowed:
             if not isinstance(entry,dict) or set(entry)-{'kind','id'} or not isinstance(entry.get('kind'),str) or not isinstance(entry.get('id'),str):fail('Choose a typed audit-room record')
             kind=entry['kind'];ident=bounded(entry['id'],100)
-            if kind=='program':get(db,org,ident)
+            if kind=='program':
+                selected=get(db,org,ident)
+                if body.get('approved_only') is True and selected['status'] not in {'approved','active','completed'}:fail('Portal sharing requires an approved, active or completed record')
             elif kind=='edition':
                 if not db.execute('SELECT 1 FROM pl_editions WHERE organization_id=%s AND id=%s',(org,ident)).fetchone():fail('Report edition not found',404)
-            elif kind in {'vendor','risk','task','evidence','finding','assessment','initiative','change'}:reference(db,org,ident,'legacy:'+kind)
+            elif kind in {'vendor','risk','task','evidence','finding','assessment','initiative','change'}:
+                reference(db,org,ident,'legacy:'+kind)
+                if body.get('approved_only') is True:
+                    if kind!='evidence':fail('Portal sharing accepts reviewed program records, verified evidence and frozen reports')
+                    from .store import require_verified_evidence
+                    require_verified_evidence(db,org,[ident])
             else:fail('Unsupported audit-room record')
             normalized.append({'kind':kind,'id':ident})
         token=secrets.token_urlsafe(48);ident=uid();db.execute('INSERT INTO pl_rooms VALUES (%s,%s,%s,%s::jsonb,%s,%s,FALSE,FALSE,%s)',(ident,org,bounded(body.get('title','Audit review'),200),json.dumps(normalized),HASH(token),int(time.time())+days*86400,user['username']))
@@ -96,5 +103,14 @@ def download(kind:str,ident:str,request:Request):
             from .reporting import MIMES
             content=bytes(row['content']);mime=MIMES[row['format']];filename='report.'+row['format']
         else:fail('Only selected evidence and frozen reports can be downloaded')
+        db.execute('INSERT INTO pl_history(organization_id,record_id,actor,action,snapshot) VALUES (%s,%s,%s,%s,%s::jsonb)',(room['organization_id'],room['room_id'],'External invited auditor','audit_room:download',json.dumps({'kind':kind,'id':ident})))
         return Response(content,media_type=mime,headers={'Content-Disposition':'attachment; filename="'+filename+'"'})
 
+
+
+@router.get('/api/platform/{org}/rooms/{ident}/activity')
+def room_activity(org:str,ident:str,request:Request):
+    with connect() as db:
+        user=session(db,request,org);owner(user)
+        if not db.execute('SELECT 1 FROM pl_rooms WHERE organization_id=%s AND id=%s',(org,ident)).fetchone():fail('Room not found',404)
+        return {'questions':table_rows(db,'SELECT body,actor,recorded_at FROM pl_room_questions WHERE organization_id=%s AND room_id=%s ORDER BY recorded_at',(org,ident)), 'downloads':table_rows(db,"SELECT actor,snapshot,recorded_at FROM pl_history WHERE organization_id=%s AND record_id=%s AND action='audit_room:download' ORDER BY id DESC LIMIT 200",(org,ident))}

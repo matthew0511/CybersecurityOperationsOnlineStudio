@@ -83,12 +83,14 @@ def record_details(org:str,ident:str,request:Request):
 
 @router.post('/api/platform/{org}/records/{kind}')
 def save_record(org:str,kind:str,body:dict,request:Request):
-    with connect() as db,db.transaction():return store.save(db,session(db,request,org,True,'records:write'),org,kind,body)
+    with connect() as db,db.transaction():return store.save(db,session(db,request,org,True,'records:approve' if kind=='op_access' else 'records:write'),org,kind,body)
 
 @router.post('/api/platform/{org}/record/{ident}/{action}')
 def record_action(org:str,ident:str,action:str,body:dict,request:Request):
     with connect() as db,db.transaction():
-        user=session(db,request,org,True,'policy:acknowledge' if action=='acknowledge' else 'records:approve' if action=='status' and body.get('status') in ('approved','rejected') else 'records:write')
+        session(db,request,org)
+        target=store.get(db,org,ident)
+        user=session(db,request,org,True,'policy:acknowledge' if action=='acknowledge' else 'records:approve' if action=='status' and (target['kind']=='op_access' or body.get('status') in ('approved','rejected')) else 'records:write')
         if action=='status':return store.transition(db,user,org,ident,body)
         if action=='execute':return workflows.execute(db,user,org,ident)
         if action=='reuse_answer':return workflows.reuse(db,user,org,ident,str(body.get('assessment_id','')),str(body.get('code','')))
@@ -308,3 +310,52 @@ def ai_overview(org:str,request:Request):
         user=session(db,request,org)
         from .ai_governance import overview
         return overview(db,user,org)
+
+
+@router.get('/api/platform/{org}/operations/overview')
+def operational_overview(org:str,request:Request):
+    from .operations import summary
+    with connect() as db:
+        user=session(db,request,org)
+        return summary(db,user,org)
+
+@router.get('/api/platform/{org}/operations/impact/{ident}')
+def operational_impact(org:str,ident:str,request:Request):
+    from .operations import impact
+    with connect() as db:
+        session(db,request,org)
+        return impact(db,org,ident)
+
+@router.post('/api/platform/{org}/operations/{ident}/run')
+def operational_action(org:str,ident:str,body:dict,request:Request):
+    from .operations import action
+    with connect() as db,db.transaction():
+        session(db,request,org)
+        target=store.get(db,org,ident)
+        user=session(db,request,org,True,'records:approve' if target['kind']=='op_campaign' else 'records:write')
+        return action(db,user,org,ident,body)
+
+@router.get('/api/platform/{org}/assurance/overview')
+def assurance_overview(org:str,request:Request):
+    from .assurance import overview
+    with connect() as db:return overview(db,session(db,request,org),org)
+
+@router.post('/api/platform/{org}/assurance/{action}')
+def assurance_action(org:str,action:str,body:dict,request:Request):
+    from . import assurance
+    with connect() as db,db.transaction():
+        cap='reports:export' if action in {'export','recovery-preview'} else 'records:read' if action in {'search','catalog-preview'} else 'records:delete' if action in {'recover','demo-reset'} else 'records:write'
+        user=session(db,request,org,True,cap)
+        if action in {'export','recover','recovery-preview','demo-reset','retry','acknowledge'}:owner(user)
+        if action=='search':return assurance.search(db,org,body)
+        if action=='bulk':return assurance.bulk(db,user,org,body)
+        if action=='catalog-preview':return assurance.catalog_diff(db,org,body)
+        if action=='catalog-migrate':return assurance.migrate(db,user,org,body)
+        if action=='export':
+            result=assurance.export_package(db,user,org);store.history(db,org,org,user['username'],'assurance:exported',{'sha256':result['sha256']});return result
+        if action=='recovery-preview':return assurance.package_preview(db,org,body.get('package'))
+        if action=='recover':return assurance.recover(db,user,org,body)
+        if action=='acknowledge':return assurance.acknowledge(db,user,org,body)
+        if action=='retry':return assurance.retry(db,user,org,body)
+        if action=='demo-reset':return assurance.demo_reset(db,user,org,body)
+        store.fail('Unknown assurance action',404)

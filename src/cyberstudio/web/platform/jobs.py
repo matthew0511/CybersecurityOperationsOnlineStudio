@@ -64,6 +64,14 @@ def tick(db):
     for row in organizations:
         org=row['id'];actor(db,user,org)
         with db.transaction():schedule(db,org,user)
+        try:
+            with db.transaction():
+                from .operations import tick as operations_tick
+                operations_tick(db,org,user)
+                from .assurance import escalation_tick
+                escalation_tick(db,user,org)
+        except Exception:
+            logging.getLogger(__name__).warning('Operations tick failed; transaction rolled back, retry on next tick')
         if os.getenv('SCAN_BUCKET'):
             try:
                 with db.transaction():quarantine.poll(db,org,user)

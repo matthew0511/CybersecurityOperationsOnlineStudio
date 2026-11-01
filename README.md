@@ -1,5 +1,9 @@
 # Cyber Security Operations Online Studio
 
+## Assurance and productivity
+
+Open **Operations workbench → Assurance & productivity** for fifteen additions to daily work, coverage, evidence, framework migration, delivery follow-up, recovery, onboarding and reporting accountability. [Technical guide and exact recovery scope](docs/ASSURANCE_PRODUCTIVITY.md).
+
 ## AI governance
 
 Open **Governance → AI Governance** for eleven linked operating registers, independent configuration-bound release decisions, branded AI board reports and the complete original Hub reference. The source is the 28 October 2026 Cybersecurity Operations Hub export; examples remain guidance and live Notion synchronization is not enabled. See the [implementation and release evidence](docs/AI_GOVERNANCE_IMPLEMENTATION.md).
@@ -197,3 +201,8 @@ Treat this as a working prototype to iterate and verify, not a compliance attest
 ## Security validation
 
 The November 1 security release adds bounded raw request handling, strict typed validation and regression coverage for fuzzing and SQL injection. Read [the timestamped security validation and remediation report](docs/SECURITY_VALIDATION_2026-11-01.md) for findings, tested source, deployed image, results and remaining operational ownership decisions.
+
+
+## Operations workbench
+
+The fifteen additions are documented in [Operations workbench technical guide](docs/OPERATIONS_WORKBENCH.md). Open Operations workbench for validation, evidence, exceptions and investment summaries; secondary pages contain detailed registers. Source implementation is separate from deployment; consult release evidence for test, image and runtime provenance.
