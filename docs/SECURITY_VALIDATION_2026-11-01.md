@@ -102,3 +102,18 @@ Report generated UTC: 2026-11-01T13:48:46.397167+00:00
 Report generated America/Chicago: 2026-11-01T07:48:46.397167-06:00
 
 Accountable Program Owner: Matthew Harris. Prepared by ChatGPT under the user-authorized security assessment and remediation request. Owner approval of residual organizational decisions is not implied.
+
+
+## Revalidation after the AI Governance release
+
+This section supersedes the current-release identifiers in the earlier baseline section while preserving its remediation history. The application advanced to accepted source 9e89998bfc155db6827b29c7e25af8fdc85aa1b8 and image ai-governance-20261101-v3, digest sha256:8768334d0d90fb3ad81e9eb65fa464236b24f8f00ba4bdfa7f47f4a356600097. ECS revision 14 completed rollout at 2026-11-01T14:29:37.589Z. At 2026-11-01T14:36:17.051046Z, two tasks were running, zero pending, all seven alarms were OK, and all four active stacks retained termination protection. The active image scan completed at 2026-11-01T14:25:37Z without reported findings. Non-root user, read-only root filesystem and dropped capabilities remain configured.
+
+Expanded test source 009b17ea81e4fd8ae4dccb2d82c2d8a9a9bccffb adds tests/test_ai_security_fuzz.py. Compared with the deployed application source, only README, documentation and this test file differ; no runtime code change or new deployment was necessary for this revalidation.
+
+CodeBuild cyber-ops-online-studio-web:083c2298-5b99-47fa-86c6-2d5ae888f91b started 2026-11-01T14:38:44.431Z and finished 2026-11-01T14:41:26.228Z (08:41:26.228 CST), SUCCEEDED. All 100 backend tests passed, with one existing test-client deprecation warning. The corpus includes 1,696 AI field mutations, 341 prior typed/paging cases and 1,000 prior seeded JSON mutations, plus SQL, nested-object, graph, export, token and tenant-boundary tests. The new checks reject forged approval metadata, maintain viewer restrictions and ensure SQL-shaped titles/configuration remain literal and organization scoped. Full-web Bandit and the dependency audit completed successfully, with no known dependency vulnerabilities reported.
+
+Credential-free live checks completed 2026-11-01T14:41:25.791801Z (08:41:25.791801 CST). Readiness, entry/static delivery, authentication requirements, owner attribution, response security headers and invalid-JSON rejection passed. The pre-existing acceptance build and green GitHub workflows separately cover browser, accessibility and image packaging for the deployed AI release; this test-only revalidation did not rebuild the production image.
+
+No additional confirmed exploit was found in this expanded corpus. Earlier malformed-input and graph amplification fixes remain present. Fuzzing is bounded deterministic testing and does not establish the absence of all vulnerabilities.
+
+AWS root caller identity remains observed. Alert-topic metadata at 2026-11-01T14:42:02.639293Z reports zero confirmed and zero pending subscriptions. Scoped AWS administration and an authorized confirmed external alert recipient therefore remain owner actions. No messages or subscription requests were sent. Restore verifier revision 5 and its existing schedule remain unchanged by this revalidation.
