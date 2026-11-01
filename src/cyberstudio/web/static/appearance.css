@@ -1,0 +1,29 @@
+/* Shared appearance surfaces, loaded after each page's component styles. */
+:root { --appearance-bg:#f3f6f8; --appearance-surface:#fff; --appearance-text:#203744; --appearance-muted:#506774; --appearance-line:#cbd8df; }
+html[data-theme=dark] { --appearance-bg:#0c1c28; --appearance-surface:#142b3a; --appearance-text:#e6edf4; --appearance-muted:#adbecb; --appearance-line:#496274; }
+.appearance-control { display:flex; flex-direction:row; align-items:center; gap:10px; width:fit-content; max-width:100%; font-size:12px; font-weight:600; margin:0 0 24px; }
+.appearance-control select { font:inherit; width:auto; min-height:40px; padding:8px 12px; border:1px solid var(--appearance-line); border-radius:6px; background:var(--appearance-surface); color:var(--appearance-text); }
+.appearance-control select:focus-visible { outline:3px solid #b87500; outline-offset:3px; }
+.doc-header .appearance-control { margin-bottom:18px; color:#e6edf4; }
+.auth-card .mark { margin-bottom:32px; }
+html[data-theme=dark],html[data-theme=dark] body,html[data-theme=dark] .doc-page { background:var(--appearance-bg); color:var(--appearance-text); }
+html[data-theme=dark] :is(.auth-wrap,.doc-main details,.audit-record,.column-options,.column-menu summary,.action-selector,.technical,.brand-preview,.framework-card.disabled,.skip-link) { background:var(--appearance-surface); color:var(--appearance-text); border-color:var(--appearance-line); }
+html[data-theme=dark] :is(.doc-main input,.doc-main textarea,.doc-main select,.doc-main button,.doc-toc a) { font:inherit; border:1px solid var(--appearance-line); border-radius:6px; padding:10px 12px; }
+html[data-theme=dark] :is(input,select,textarea,.doc-toc a) { background:var(--appearance-surface); color:var(--appearance-text); border-color:var(--appearance-line); }
+html[data-theme=dark] :is(.doc-main th,.doc-main td,.pl-entry,.pl-dialog,.pl-panel,.question-card,.xp-question-section,.toolbar,.action-selector) { border-color:var(--appearance-line); }
+html[data-theme=dark] :is(.doc-main a,.auth-card a,.auth-card summary,.eyebrow,.record-title:hover,.small-link,.attention-row button) { color:#81dfcf; }
+html[data-theme=dark] :is(.brand-preview p,.detail-field dd,.detail-section p,.summary-tile strong,.bar-label strong) { color:var(--appearance-text); }
+html[data-theme=dark] :is(.card-note,.updated-at,.empty,.record-subtitle,.chart-label,.chart-note,.legend,.axis-title,.heatmap .axis,.bar-label,.attention-row small,.framework-edition,.framework-meta,.report-card p,.field-help,.field-grid .section-label,.detail-field dt,.technical summary,.timeline p,.timeline small,.structured-summary dt,.upload-panel>p,footer,.panel-head .eyebrow,.dialog-head .eyebrow) { color:var(--appearance-muted); }
+html[data-theme=dark] :is(.toolbar a,.report-link,.detail-download,.card-icon,.framework-symbol,.pagination button.active,.density-button[aria-pressed=true],.switch[aria-pressed=true]) { background:#204854; color:#b9f1e6; }
+html[data-theme=dark] :is(.attention-marker,.attention-count,.badge.warning,.pl-demo) { background:#46371b; color:#ffdb91; border-color:#8e7540; }
+html[data-theme=dark] :is(.attention-marker.danger,.attention-count.danger,.badge.danger) { background:#4c2c31; color:#ffb9b1; border-color:#9c6669; }
+html[data-theme=dark] .badge.success { background:#1b443b; color:#aff0d2; }
+html[data-theme=dark] :is(.form-error,.due-overdue,.card-note.danger) { color:#ffb9b1; }
+html[data-theme=dark] .card-note.warning { color:#ffdb91; }
+html[data-theme=dark] .card-note.success { color:#aff0d2; }
+html[data-theme=dark] .skeleton { background:linear-gradient(90deg,#193445 25%,#2a4759 50%,#193445 75%); background-size:200% 100%; }
+html[data-theme=dark] .doc-main button { background:#0c6e69; color:#fff; cursor:pointer; }
+html[data-theme=dark] .doc-main label { display:grid; gap:8px; margin:14px 0; }
+html[data-theme=dark] .doc-main :is(input,textarea) { width:100%; box-sizing:border-box; }
+/* Printed documents retain paper colors regardless of the screen appearance. */
+@media print { .appearance-control { display:none; } html[data-theme] .doc-page,html[data-theme] .doc-main,html[data-theme] .doc-main :is(details,.audit-record,th,td) { background:#fff; color:#173543; } html[data-theme] .doc-main a { color:#0c6e69; } }
