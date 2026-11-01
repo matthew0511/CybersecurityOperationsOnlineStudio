@@ -1,5 +1,9 @@
 # Cyber Security Operations Online Studio
 
+## AI governance
+
+Open **Governance → AI Governance** for eleven linked operating registers, independent configuration-bound release decisions, branded AI board reports and the complete original Hub reference. The source is the 28 October 2026 Cybersecurity Operations Hub export; examples remain guidance and live Notion synchronization is not enabled. See the [implementation and release evidence](docs/AI_GOVERNANCE_IMPLEMENTATION.md).
+
 ## Online platform expansion
 
 The online Studio includes the fifty-enhancement program center, account security, app-integration adapters, frozen branded reports and scoped auditor workspaces. Open the authenticated [documentation subpage](https://cybersecurityoperationstudio.com/documentation) for workflows, field references, provider setup and operational guidance.

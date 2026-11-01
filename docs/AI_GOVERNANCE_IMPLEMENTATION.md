@@ -68,3 +68,19 @@ Build and validate the exact Git SHA in isolated CodeBuild, inspect the CloudFor
 Tests cover source provenance, register availability, authentication, viewer denial, cross-organization reference rejection, malformed enums, sensitive/clinical risk escalation, independent approval, readiness without authorization, stale configuration, material-event holds, evidence invalidation, closed decisions, frozen report hashes and formula-safe exports. The browser suite checks AI navigation, source searching and decision forms in addition to the existing appearance, mobile and accessibility workflow checks. Full security/fuzz and regression gates remain required.
 
 No source examples were loaded as live records. No vendor credential, model invocation, patient-data flow, notification, external suspension action or clinical/legal determination is created by this migration. The source snapshot is complete; each organization's actual adoption, role delegation, professional review, training and operational-control evidence must be established through its own records.
+
+
+## Release validation — 1 November 2026
+
+Program Owner - Matthew Harris
+
+- Original source SHA-256: `34d18a58c692f35f382b9ab5a63f1f354bcac51a5f376907ad6f1befe0b6aa6c`. The unchanged Markdown hash is checked against the application reference in the automated suite.
+- Accepted application commit: `9e89998bfc155db6827b29c7e25af8fdc85aa1b8`.
+- CodeBuild: `cyber-ops-online-studio-web:03bb26e4-9feb-469c-a84c-04e9e8682c17`, SUCCEEDED. 96 backend tests (one existing test-client deprecation warning), seven interface logic tests, appearance checks, desktop/mobile workflow checks including AI reference/registers, automated accessibility, full-web static analysis, dependency audit, template lint and hardened non-root/read-only container smoke test passed.
+- Image: `ai-governance-20261101-v3`; digest `sha256:8768334d0d90fb3ad81e9eb65fa464236b24f8f00ba4bdfa7f47f4a356600097`. ECR scan completed without reported findings.
+- Runtime change set: `ai-governance-app-only-20261101-v3`. Its changes were limited to ApplicationTask, Builder and Service. Database, network, migration and restore-verifier resources were not changed. Stack termination protection remained enabled.
+- ECS revision `cyber-ops-online-studio-web:14` completed deployment at `2026-11-01T14:29:37.594Z` (08:29:37.594 America/Chicago). Desired/running counts were two; pending was zero. All seven Studio alarms were OK. Existing restore verifier revision `:5` remained ACTIVE.
+- Live credential-free checks returned 200 and byte-for-byte tested-source matches for the entry page, AI JavaScript and AI CSS. Readiness reported database connected. Both `/api/platform/ai/reference` and the scoped AI overview returned 401 without authentication. Owner credentials were not retrieved or used.
+- Earlier validation candidates were not deployed: v1 caught a report sheet-name expectation; v2 caught the mobile test observing the responsive navigation transition before it settled. The final candidate waits for a stable viewport and retains the overflow assertion. It passed the full suite before release.
+
+Authenticated workflow tests used synthetic fixtures in an isolated PostgreSQL test database. Live checks establish deployment, readiness, public asset identity and authentication boundaries; they do not claim owner-account acceptance, external AI-system enforcement, a new restore drill, adopted organizational policy or live Notion synchronization.

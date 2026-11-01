@@ -241,3 +241,10 @@ The runtime template takes `SourceCommit` as an exact GitHub SHA and builds thro
 The operations template additionally takes the source database's subnet-group, option-group and parameter-group names. These are infrastructure metadata returned by DescribeDBInstances, not passwords. Restore authorization is limited to those exact groups plus the source database and the `studio-restore-*` target prefix. Keep the verifier task ARN current when a runtime task-definition replacement occurs. Run a real restore after changing executor permissions. The monthly rule is enabled only after the first verified execution; cron is the first day of the month at 04:00 UTC.
 
 Program Owner - Matthew Harris attribution remains independent of customer branding on the application, documentation and generated reports. Application settings cannot change it; source and deployment administrators retain control of the software.
+
+
+## AI governance and application-only image releases — 1 November 2026
+
+The original Cybersecurity Operations Hub AI Governance reference is available under Governance → AI Governance → Source reference. The eleven operating registers and configuration-bound independent release workflow are described in [AI_GOVERNANCE_IMPLEMENTATION.md](AI_GOVERNANCE_IMPLEMENTATION.md). This uses the 28 October 2026 export; it does not activate live Notion synchronization or treat illustrative cases as actual approvals.
+
+For releases that need no database migration, set the optional `ApplicationImageTag` to the tested immutable application image and update `SourceCommit`. The default builder uses that same application image target. Keep `ImageTag` unchanged to preserve the accepted migration and restore-verifier task definitions and their scheduled references. An empty `ApplicationImageTag` retains the legacy shared-tag behavior. For an actual schema/restore change, plan and validate those image and reference changes explicitly rather than treating an application-only release as migration authorization.
