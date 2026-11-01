@@ -248,3 +248,12 @@ Program Owner - Matthew Harris attribution remains independent of customer brand
 The original Cybersecurity Operations Hub AI Governance reference is available under Governance → AI Governance → Source reference. The eleven operating registers and configuration-bound independent release workflow are described in [AI_GOVERNANCE_IMPLEMENTATION.md](AI_GOVERNANCE_IMPLEMENTATION.md). This uses the 28 October 2026 export; it does not activate live Notion synchronization or treat illustrative cases as actual approvals.
 
 For releases that need no database migration, set the optional `ApplicationImageTag` to the tested immutable application image and update `SourceCommit`. The default builder uses that same application image target. Keep `ImageTag` unchanged to preserve the accepted migration and restore-verifier task definitions and their scheduled references. An empty `ApplicationImageTag` retains the legacy shared-tag behavior. For an actual schema/restore change, plan and validate those image and reference changes explicitly rather than treating an application-only release as migration authorization.
+
+
+## Operations workbench extension — November 1, 2026
+
+See [OPERATIONS_WORKBENCH.md](OPERATIONS_WORKBENCH.md) for the fifteen additions, secondary-page mapping, module dictionary, permissions, evidence gates, APIs, calculations, worker execution and release verification. In-app documentation includes the overview and generated field dictionary. Existing AI governance, appearance, security and platform behavior remains in the regression scope.
+
+## Assurance and productivity extension — November 1, 2026
+
+Open **Operations workbench → Assurance & productivity** for My Work Today, data quality, coverage/confidence, delivery follow-up, framework-version comparison, evidence reuse, detection engineering, service coverage, package recovery, role onboarding, board follow-through, release readiness, saved views, bulk owner/due changes and metrics. See [the technical guide](ASSURANCE_PRODUCTIVITY.md) for field semantics, security boundaries, package scope and validation evidence.

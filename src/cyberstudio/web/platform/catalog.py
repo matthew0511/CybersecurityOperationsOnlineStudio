@@ -48,3 +48,10 @@ def modules():
 from .ai_catalog import AI_MODULES,AI_APPROVAL_KINDS
 MODULES.update(AI_MODULES)
 APPROVAL_KINDS.update(AI_APPROVAL_KINDS)
+
+from .operations_catalog import OPS_MODULES,OPS_APPROVAL_KINDS
+MODULES.update(OPS_MODULES)
+APPROVAL_KINDS.update(OPS_APPROVAL_KINDS)
+
+from .assurance_catalog import MODULES as ASSURANCE_MODULES
+MODULES.update(ASSURANCE_MODULES)

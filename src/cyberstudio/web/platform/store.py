@@ -115,6 +115,12 @@ def validate(db,org,kind,data):
     if kind.startswith('ai_'):
         from .ai_governance import validate_record
         result=validate_record(db,org,kind,result)
+    if kind.startswith('as_'):
+        from .assurance import validate as validate_assurance
+        result=validate_assurance(db,org,kind,result)
+    if kind.startswith('op_'):
+        from .operations import validate as validate_operations
+        result=validate_operations(db,org,kind,result)
     return result
 
 def validate_rules(rules):
@@ -146,23 +152,27 @@ def history(db,org,ident,username,action,snapshot):
     audit(db,username,'platform:'+action)
 
 def save(db,user,org,kind,body):
-    access(db,user,org,True)
+    access(db,user,org,True,'records:approve' if kind=='op_access' else 'records:write')
     if body.get('id') is not None:bounded(body['id'],100)
     if 'version' in body and (isinstance(body['version'],bool) or not isinstance(body['version'],int) or body['version']<1):fail('Version must be a positive integer')
     ident=body.get('id') or uid();previous=get(db,org,ident,kind,lock=True) if body.get('id') else None
     if previous and previous['status'] not in {'draft','in_progress'} and kind in APPROVAL_KINDS:fail('Reopen the reviewed version before editing',409)
-    if previous and kind in {'ai_review','ai_evaluation','ai_training'} and previous['status'] not in {'draft','in_progress'}:fail('Reopen this completed AI review or evaluation before editing',409)
+    if previous and kind in {'ai_review','ai_evaluation','ai_training','op_access','op_vulnerability','op_recovery','op_milestone','op_campaign'} and previous['status'] not in {'draft','in_progress'}:fail('Reopen this completed review or evaluation before editing',409)
     if previous and body.get('version')!=previous['version']:fail('This record changed. Reload and reconcile your edit.',409)
     title=bounded(body.get('title',''),300)
     if not title:fail('Enter a record title')
     owner=bounded(body.get('owner',''),100)
+    if kind.startswith(('op_','as_')) and not owner:owner=user['username']
     due=body.get('due_on') or None
     if due:
         try:date.fromisoformat(due)
         except (ValueError,TypeError):fail('Choose a valid due date')
     data=validate(db,org,kind,body.get('data',{}))
-    if kind in {'site','asset'}:
-        refs=[data['parent_id']] if kind=='site' and data.get('parent_id') else data.get('dependencies',[]) if kind=='asset' else []
+    if kind.startswith('op_'):
+        from .operations import guard_save
+        guard_save(db,user,org,kind,data)
+    if kind in {'site','asset','op_crypto'}:
+        refs=[data['parent_id']] if kind=='site' and data.get('parent_id') else data.get('dependencies',[]) if kind in {'asset','op_crypto'} else []
         seen=set();visiting=set();pending=[(node,False) for node in refs]
         while pending:
             node,leaving=pending.pop()
@@ -171,7 +181,7 @@ def save(db,user,org,kind,body):
             if node in seen:continue
             if len(seen)+len(visiting)>=10000:fail('Dependency graph exceeds the validation limit')
             visiting.add(node);pending.append((node,True))
-            item=get(db,org,node,kind);nexts=[item['data']['parent_id']] if kind=='site' and item['data'].get('parent_id') else item['data'].get('dependencies',[]) if kind=='asset' else []
+            item=get(db,org,node,kind);nexts=[item['data']['parent_id']] if kind=='site' and item['data'].get('parent_id') else item['data'].get('dependencies',[]) if kind in {'asset','op_crypto'} else []
             pending.extend((child,False) for child in nexts)
     if kind=='delegation' and user['role']!='owner' and data.get('from_user')!=user['username']:fail('You can delegate only your own responsibilities',403)
     status=previous['status'] if previous else 'draft'
@@ -181,14 +191,18 @@ def save(db,user,org,kind,body):
     return record
 
 def transition(db,user,org,ident,body):
-    access(db,user,org,True,'records:approve' if body.get('status') in ('approved','rejected') else 'records:write')
+    access(db,user,org)
     record=get(db,org,ident,lock=True)
+    access(db,user,org,True,'records:approve' if record['kind']=='op_access' or body.get('status') in ('approved','rejected') else 'records:write')
     if body.get('version')!=record['version']:fail('Record changed; reload before changing its status',409)
     status=bounded(body.get('status',''),50);old=record['status']
     if status not in STATUSES:fail('Choose a valid status')
     transitions={'draft':{'in_progress','submitted','active','closed'},'in_progress':{'submitted','completed','closed'},'submitted':{'approved','rejected','draft'},'approved':{'active','closed','draft'},'active':{'completed','closed','draft'},'completed':{'draft','closed'},'rejected':{'draft'},'closed':{'draft'}}
     if status not in transitions.get(old,set()):fail('This status transition is not permitted',409)
     data=record['data']
+    if record['kind'].startswith('op_'):
+        from .operations import guard_transition
+        guard_transition(db,user,org,record,status)
     if record['kind'] in APPROVAL_KINDS:
         if status in {'approved','rejected'}:
             if old!='submitted' or record['created_by']==user['username']:fail('An independent assigned reviewer must approve this version',403)
