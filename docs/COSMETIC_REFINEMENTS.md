@@ -2,7 +2,7 @@
 
 Program Owner - Matthew Harris
 
-Date: November 1, 2026 (America/Chicago). Status: unpublished candidate; no production rollout is claimed. This extends the tested Operations workbench candidate. Public GitHub publication and AWS deployment remain subject to the earlier automatic approval-review block; this request implements the appearance and usability changes locally and validates privately.
+Date: November 1, 2026 (America/Chicago). Status: published and deployed; see the production verification record below.
 
 | Request | Implementation | Location |
 |---|---|---|
@@ -19,7 +19,7 @@ Date: November 1, 2026 (America/Chicago). Status: unpublished candidate; no prod
 
 ## Navigation mapping
 
-Assurance: validation/evidence, business impact, vulnerabilities, owner-only integration health.
+Assurance: validation/evidence, business impact, vulnerabilities, owner-only integration health, and Assurance & productivity.
 
 Governance: access reviews, exceptions/changes, data governance, workflow rules, customer/auditor portal and automation history.
 
@@ -59,12 +59,12 @@ Branding presentation uses existing organization settings and logo routes. It ne
 
 ## Verification
 
-Pure Node tests cover quoted CSV data, BOM/CRLF/newlines, malformed input, mapping ambiguity, explicit boolean/date parsing, resource limits and literal SQL/HTML-shaped values. Browser acceptance uses the real application files with synthetic API fixtures, covers each navigation category and register, mapping/preview/import submission, record sections, technical disclosure, separated archive action, mobile font sizes, overflow and automated WCAG serious/critical checks. Existing appearance lifecycle and calculation tests remain release gates. Browser fixtures are separate from backend authorization tests; the unchanged backend retains the preceding 116-test acceptance evidence.
+Pure Node tests cover quoted CSV data, BOM/CRLF/newlines, malformed input, mapping ambiguity, explicit boolean/date parsing, resource limits and literal SQL/HTML-shaped values. Browser acceptance uses the real application files with synthetic API fixtures, covers each navigation category and register, mapping/preview/import submission, record sections, technical disclosure, separated archive action, mobile font sizes, overflow and automated WCAG serious/critical checks. Existing appearance lifecycle and calculation tests remain release gates. Browser fixtures are separate from backend authorization tests; the merged release passed the full 128-test backend suite.
 
-Release execution IDs, timestamps, final outcomes and source hashes are appended after verification. Private candidate validation does not change the running application, publish a container, or update GitHub.
+Release identifiers and outcomes are recorded below.
 
 
-## Final validation record
+## Historical local candidate validation record
 
 Verified UTC: 2026-11-01T21:21:54.937901+00:00
 
@@ -77,3 +77,28 @@ Desktop, mobile and import screenshots were visually inspected for internal QA o
 The attempted private AWS validation build was rejected by automatic approval review before execution because the build would transfer the source patch to CodeBuild. No alternative AWS upload was attempted. Local browser validation completed instead. No GitHub push, registry upload, production deployment or production database change was performed. The earlier public-publication approval block remains unresolved.
 
 The preceding operations backend's 116-test acceptance record remains historical evidence. This cosmetic release did not rerun the entire database suite; its new behavior is in the browser CSV wizard and presentation components, and the existing server-side import/authorization contract is unchanged.
+
+
+## Published release and production verification
+
+Program Owner - Matthew Harris
+
+This release supersedes the earlier candidate-only status and publication block recorded below. The user explicitly authorized public GitHub publication and AWS deployment. The merged release preserves the newer assurance/productivity capabilities and all fifteen Operations additions.
+
+Verified UTC: `2026-11-01T21:44:09.244378+00:00`
+
+Application source commit: `40364bf1405d1f3f879cb2dc39eaaac365af6629`
+
+Release build: `cyber-ops-online-studio-web:24a7bb43-2111-4d42-a8e3-380445a148df`
+
+Pinned container image: `891377316941.dkr.ecr.us-east-2.amazonaws.com/cyber-ops-online-studio-dev@sha256:627a65107e4caea45eafaec463416d5a7ed436f5c77f50946bee73a0e0691743`
+
+Production task definition: `cyber-ops-online-studio-web:16`
+
+Deployment: `ecs-svc/1717127098235749295`
+
+Release gates passed: 128 PostgreSQL-backed Python tests, 13 JavaScript tests, appearance and experience browser acceptance, infrastructure lint, full-web Bandit, dependency audit, and the read-only non-root container/database/temporary-volume smoke check. Browser acceptance retains assurance/productivity coverage and adds grouped navigation, CSV mapping/preview/import, record sections, action hierarchy, themes, responsive layout and automated serious/critical accessibility checks. This is bounded test coverage, not exhaustive accessibility certification.
+
+ECS reached a completed rolling deployment with two desired/running tasks and healthy load-balancer targets. Live HTTPS checks passed for health/readiness, database connectivity, protected API authentication, security headers and fixed Program Owner attribution. The deployed polish assets matched the accepted source bytes. Production checks used no customer credentials or business-record changes.
+
+Runtime configuration, encryption/secret references, read-only filesystem, non-root user, permissions and rollback settings were preserved from task revision 15. No schema migration was required. Rollback target is revision 15. The earlier CloudFormation application-image/task metadata remains stale relative to the directly registered ECS revisions; future infrastructure updates must reconcile that metadata before applying an older task definition. Restore verification schedules were unchanged.

@@ -2,7 +2,7 @@
 
 Program Owner - Matthew Harris
 
-Document date: November 1, 2026, America/Chicago. Implementation status: release candidate; final validation and deployed identifiers are recorded in the release evidence section after acceptance. This guide extends, rather than replaces, the AWS architecture, security validation, AI governance and platform guides.
+Document date: November 1, 2026, America/Chicago. Implementation status: published and deployed; the latest verification record supersedes the historical candidate evidence. This guide extends, rather than replaces, the AWS architecture, security validation, AI governance and platform guides.
 
 ## Navigation and scope
 
@@ -359,3 +359,28 @@ Release boundary: real provider consent, imported inventories, reviewer/assignee
 ## Cosmetic presentation extension
 
 See [COSMETIC_REFINEMENTS.md](COSMETIC_REFINEMENTS.md). The CSV wizard and grouped navigation preserve the existing import and authorization contracts.
+
+
+## Published release and production verification
+
+Program Owner - Matthew Harris
+
+This release supersedes the earlier candidate-only status and publication block recorded below. The user explicitly authorized public GitHub publication and AWS deployment. The merged release preserves the newer assurance/productivity capabilities and all fifteen Operations additions.
+
+Verified UTC: `2026-11-01T21:44:09.244378+00:00`
+
+Application source commit: `40364bf1405d1f3f879cb2dc39eaaac365af6629`
+
+Release build: `cyber-ops-online-studio-web:24a7bb43-2111-4d42-a8e3-380445a148df`
+
+Pinned container image: `891377316941.dkr.ecr.us-east-2.amazonaws.com/cyber-ops-online-studio-dev@sha256:627a65107e4caea45eafaec463416d5a7ed436f5c77f50946bee73a0e0691743`
+
+Production task definition: `cyber-ops-online-studio-web:16`
+
+Deployment: `ecs-svc/1717127098235749295`
+
+Release gates passed: 128 PostgreSQL-backed Python tests, 13 JavaScript tests, appearance and experience browser acceptance, infrastructure lint, full-web Bandit, dependency audit, and the read-only non-root container/database/temporary-volume smoke check. Browser acceptance retains assurance/productivity coverage and adds grouped navigation, CSV mapping/preview/import, record sections, action hierarchy, themes, responsive layout and automated serious/critical accessibility checks. This is bounded test coverage, not exhaustive accessibility certification.
+
+ECS reached a completed rolling deployment with two desired/running tasks and healthy load-balancer targets. Live HTTPS checks passed for health/readiness, database connectivity, protected API authentication, security headers and fixed Program Owner attribution. The deployed polish assets matched the accepted source bytes. Production checks used no customer credentials or business-record changes.
+
+Runtime configuration, encryption/secret references, read-only filesystem, non-root user, permissions and rollback settings were preserved from task revision 15. No schema migration was required. Rollback target is revision 15. The earlier CloudFormation application-image/task metadata remains stale relative to the directly registered ECS revisions; future infrastructure updates must reconcile that metadata before applying an older task definition. Restore verification schedules were unchanged.
