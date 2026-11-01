@@ -60,7 +60,7 @@ def freeze(db,user,org,body):
     from .store import access
     access(db,user,org,False,'reports:export')
     template=body.get('template','board');format=body.get('format','pdf')
-    if template not in TEMPLATES or format not in MIMES:fail('Choose a supported report template and format')
+    if not isinstance(template,str) or not isinstance(format,str) or template not in TEMPLATES or format not in MIMES:fail('Choose a supported report template and format')
     from ..experience import report_payload,render_custom_report
     settings={**body,'sections':body.get('sections') or TEMPLATES[template]['sections']}
     payload=report_payload(db,org,settings);payload['report_title']=TEMPLATES[template]['title'];brand=service(db).report_branding(org)
@@ -83,3 +83,4 @@ def variance(db,org):
             changes.append({'metric':name,'previous':before,'current':value,'change':value-before})
     activity=db.execute('SELECT entity_type,action,recorded_at FROM audit_events WHERE organization_id=%s AND recorded_at>=%s ORDER BY recorded_at DESC LIMIT 100',(org,str(previous['day']))).fetchall()
     return {'available':True,'from':previous['day'],'to':latest['day'],'changes':changes,'supporting_activity':[dict(r) for r in activity],'interpretation':'Activity provides context; it does not prove causation or independent control effectiveness.'}
+

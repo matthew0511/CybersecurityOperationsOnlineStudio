@@ -72,7 +72,7 @@ def records(org:str,kind:str,request:Request,q:str='',offset:int=0):
     if kind not in catalog.MODULES:store.fail('Unsupported module',404)
     with connect() as db:
         session(db,request,org)
-        if offset<0 or len(q)>100:store.fail('Invalid search or page')
+        if not 0<=offset<=2147483647 or len(q)>100:store.fail('Invalid search or page')
         return table_rows(db,'SELECT * FROM pl_records WHERE organization_id=%s AND kind=%s AND deleted_at IS NULL AND title ILIKE %s ORDER BY updated_at DESC LIMIT 100 OFFSET %s',(org,kind,'%'+q+'%',offset))
 
 @router.get('/api/platform/{org}/record/{ident}')
@@ -88,7 +88,7 @@ def save_record(org:str,kind:str,body:dict,request:Request):
 @router.post('/api/platform/{org}/record/{ident}/{action}')
 def record_action(org:str,ident:str,action:str,body:dict,request:Request):
     with connect() as db,db.transaction():
-        user=session(db,request,org,True,'policy:acknowledge' if action=='acknowledge' else 'records:approve' if action=='status' and body.get('status') in {'approved','rejected'} else 'records:write')
+        user=session(db,request,org,True,'policy:acknowledge' if action=='acknowledge' else 'records:approve' if action=='status' and body.get('status') in ('approved','rejected') else 'records:write')
         if action=='status':return store.transition(db,user,org,ident,body)
         if action=='execute':return workflows.execute(db,user,org,ident)
         if action=='reuse_answer':return workflows.reuse(db,user,org,ident,str(body.get('assessment_id','')),str(body.get('code','')))
@@ -237,7 +237,7 @@ def capabilities(org:str,body:dict,request:Request):
     allowed={'records:write','records:approve','records:delete','evidence:upload','reports:export','integrations:manage','tasks:write'}
     with connect() as db,db.transaction():
         user=session(db,request,org,True);owner(user);reauthenticate(db,user,body);username=str(body.get('username',''));denied=body.get('denied',[])
-        if not isinstance(denied,list) or set(denied)-allowed:store.fail('Choose supported capability restrictions')
+        if not isinstance(denied,list) or not all(isinstance(v,str) for v in denied) or set(denied)-allowed:store.fail('Choose supported capability restrictions')
         if not db.execute('SELECT 1 FROM xp_memberships WHERE organization_id=%s AND username=%s',(org,username)).fetchone():store.fail('Choose a current organization member')
         db.execute('INSERT INTO pl_capabilities VALUES (%s,%s,%s::jsonb) ON CONFLICT(organization_id,username) DO UPDATE SET denied=EXCLUDED.denied',(org,username,json.dumps(denied)));store.history(db,org,username,user['username'],'permissions:restricted',{'denied':denied});return {'saved':True}
 
@@ -254,7 +254,7 @@ def issue_token(org:str,body:dict,request:Request):
         if body.get('revoke'):
             db.execute('UPDATE pl_tokens SET revoked=TRUE WHERE organization_id=%s AND id=%s',(org,str(body['revoke'])));return {'revoked':True}
         scopes=body.get('scopes',['records:read']);days=body.get('days',30)
-        if not isinstance(scopes,list) or not scopes or set(scopes)-{'records:read','records:write'} or isinstance(days,bool) or not isinstance(days,int) or not 1<=days<=90:store.fail('Choose valid scopes and a 1–90 day lifetime')
+        if not isinstance(scopes,list) or not scopes or not all(isinstance(v,str) for v in scopes) or set(scopes)-{'records:read','records:write'} or isinstance(days,bool) or not isinstance(days,int) or not 1<=days<=90:store.fail('Choose valid scopes and a 1–90 day lifetime')
         token='csos_i_'+secrets.token_urlsafe(40);ident=store.uid();db.execute('INSERT INTO pl_tokens(id,organization_id,token_hash,name,scopes,created_by,expires_at) VALUES (%s,%s,%s,%s,%s::jsonb,%s,%s)',(ident,org,HASH(token),store.bounded(body.get('name','Integration token'),100),json.dumps(scopes),user['username'],int(time.time())+days*86400));store.history(db,org,ident,user['username'],'token:issued',{'scopes':scopes,'days':days});return {'id':ident,'token':token,'message':'Copy now. The token value will not be shown again.'}
 
 
@@ -292,3 +292,4 @@ def demo(body:dict,request:Request):
 
 @router.get('/account-recovery')
 def recovery_page():return FileResponse(STATIC/'account-recovery.html')
+

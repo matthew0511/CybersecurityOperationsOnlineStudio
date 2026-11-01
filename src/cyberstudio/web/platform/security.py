@@ -1,3 +1,4 @@
+from ..request_security import safe_compare
 """TOTP enrollment, recovery, sessions and tenant-pinned OIDC. Secrets never enter logs."""
 import base64,hashlib,hmac,json,os,re,secrets,time
 from datetime import datetime,timezone
@@ -35,7 +36,7 @@ def verify_factor(db,username,code):
     if not row or not row['enabled']:return False
     if re.fullmatch(r'\d{6}',code):
         secret=unseal(row['secret_cipher']);step=int(time.time())//30
-        accepted=next((v for v in (step-1,step,step+1) if v>row['last_step'] and hmac.compare_digest(pyotp.TOTP(secret).at(v*30),code)),None)
+        accepted=next((v for v in (step-1,step,step+1) if v>row['last_step'] and safe_compare(pyotp.TOTP(secret).at(v*30),code)),None)
         if accepted is not None:
             db.execute('UPDATE pl_mfa SET last_step=%s WHERE username=%s',(accepted,username));return True
     used=db.execute("UPDATE pl_recovery SET used_at=CURRENT_TIMESTAMP WHERE code_hash=%s AND username=%s AND purpose='mfa' AND used_at IS NULL RETURNING code_hash",(HASH(code),username)).fetchone()
@@ -86,7 +87,7 @@ def manage(action:str,body:dict,request:Request):
             row=db.execute('SELECT * FROM pl_mfa WHERE username=%s FOR UPDATE',(username,)).fetchone()
             if not row or row['enabled'] or (datetime.now(timezone.utc)-row['updated_at']).total_seconds()>600:fail('Enter a valid code from the pending authenticator')
             step=int(time.time())//30;totp=pyotp.TOTP(unseal(row['secret_cipher']))
-            accepted=next((v for v in (step-1,step,step+1) if hmac.compare_digest(totp.at(v*30),str(body.get('code','')))),None)
+            accepted=next((v for v in (step-1,step,step+1) if safe_compare(totp.at(v*30),str(body.get('code','')))),None)
             if accepted is None:fail('Enter a valid code from the pending authenticator')
             db.execute('UPDATE pl_mfa SET enabled=TRUE,last_step=%s,updated_at=CURRENT_TIMESTAMP WHERE username=%s',(accepted,username))
             codes=recovery_codes(db,username,'mfa');db.execute('DELETE FROM web_sessions WHERE username=%s AND token_hash<>%s',(username,user['token_hash']));audit(db,username,'mfa:enabled')
@@ -153,7 +154,7 @@ def sso_start():
 @router.get('/api/sso/callback')
 def sso_callback(request:Request,code:str='',state:str=''):
     from ..app import COOKIE
-    if not state or len(state)>200 or len(code)>12000 or not hmac.compare_digest(state,request.cookies.get('__Host-studio-oidc','')):fail('Sign-in state did not match',403)
+    if not state or len(state)>200 or len(code)>12000 or not safe_compare(state,request.cookies.get('__Host-studio-oidc','')):fail('Sign-in state did not match',403)
     with connect() as db,db.transaction():
         pending=db.execute('UPDATE pl_oidc SET used=TRUE WHERE state_hash=%s AND NOT used AND expires_at>%s RETURNING *',(HASH(state),int(time.time()))).fetchone()
         configured=db.execute("SELECT * FROM pl_installation WHERE key='entra' AND value->>'enabled'='true'").fetchone()
@@ -169,7 +170,7 @@ def sso_callback(request:Request,code:str='',state:str=''):
             header=jwt.get_unverified_header(token)
             key=next(k for k in keys.json()['keys'] if k.get('kid')==header.get('kid'))
             claims=jwt.decode(token,jwt.PyJWK.from_dict(key).key,algorithms=['RS256'],audience=cfg['client_id'],issuer='https://login.microsoftonline.com/'+tenant+'/v2.0',options={'require':['exp','iat','nonce','oid','tid','sub']})
-            if claims['tid']!=tenant or not hmac.compare_digest(claims['nonce'],pending['nonce']):raise ValueError()
+            if claims['tid']!=tenant or not safe_compare(claims['nonce'],pending['nonce']):raise ValueError()
         except (jwt.PyJWTError,StopIteration,ValueError,KeyError):fail('Microsoft token validation failed',403)
         mapping=db.execute('SELECT a.username,u.enabled FROM pl_oidc_accounts a JOIN web_users u ON u.username=a.username WHERE tenant_id=%s AND object_id=%s',(tenant,claims['oid'])).fetchone()
         if not mapping or not mapping['enabled']:fail('This tenant identity has not been mapped to an enabled Studio account',403)
@@ -202,7 +203,7 @@ def sso_factor(body:dict,request:Request):
         hashed=HASH(request.cookies.get('__Host-studio-sso-factor',''))
         with db.transaction():
             row=db.execute('UPDATE pl_sso_challenges SET attempts=attempts+1 WHERE token_hash=%s AND expires_at>%s AND attempts<5 RETURNING *',(hashed,int(time.time()))).fetchone()
-        if not row or not hmac.compare_digest(request.headers.get('x-csrf-token',''),row['csrf']):fail('Microsoft authenticator challenge expired or invalid',403)
+        if not row or not safe_compare(request.headers.get('x-csrf-token',''),row['csrf']):fail('Microsoft authenticator challenge expired or invalid',403)
         with db.transaction():
             if not db.execute('SELECT 1 FROM web_users WHERE username=%s AND enabled',(row['username'],)).fetchone():fail('Account is disabled',403)
             if not verify_factor(db,row['username'],str(body.get('code',''))):fail('Enter a fresh authenticator or unused MFA recovery code',403)
@@ -217,3 +218,4 @@ def enrollment_required(db,username):
     if not policy or policy['value'].get('require_mfa') is not True:return False
     factor=db.execute('SELECT enabled FROM pl_mfa WHERE username=%s',(username,)).fetchone()
     return not (factor and factor['enabled'])
+

@@ -31,6 +31,7 @@ def test_request_boundary_without_database():
 def test_typed_route_mutation_corpus(web):
     login(web);org=call(web,'create_organization',name='Fuzz fixture')
     c=quiet(web);failures=[];checks=0
+    site=c.post(f'/api/platform/{org}/records/site',json={'title':'Mutation target','data':{}}).json()
     cases=[
       (f'/api/platform/{org}/rooms',{'allowed':[{'kind':'program','id':'missing'}]},'allowed'),
       (f'/api/platform/{org}/tokens',{'password':PW,'scopes':['records:read']},'scopes'),
@@ -44,6 +45,15 @@ def test_typed_route_mutation_corpus(web):
       (f'/api/platform/{org}/records/site',{'title':'safe','data':{}},'title'),
       (f'/api/platform/{org}/records/site',{'title':'safe','data':{}},'data'),
       (f'/api/call/list_risks',{'arguments':{'org':org}},'arguments'),
+      (f'/api/platform/{org}/record/{site["id"]}/status',{'version':1,'status':'in_progress'},'status'),
+      (f'/api/platform/{org}/bulk-tasks',{'ids':['missing'],'changes':{'owner':'test'}},'ids'),
+      (f'/api/platform/{org}/bulk-tasks',{'ids':[],'changes':{'owner':'test'}},'changes'),
+      (f'/api/platform/{org}/integrations',{'provider':'github','config':{},'credentials':{}},'credentials'),
+      (f'/api/platform/{org}/integrations',{'provider':'github','config':{},'credentials':{}},'provider'),
+      (f'/api/experience/{org}/comment',{'type':'site','id':'missing','body':'test'},'type'),
+      (f'/api/experience/{org}/invite',{'kind':'team','username':'testuser','role':'viewer'},'kind'),
+      (f'/api/experience/{org}/invite',{'kind':'team','username':'testuser','role':'viewer'},'role'),
+      (f'/api/experience/{org}/membership',{'username':'missing','role':'viewer'},'role'),
     ]
     for path,body,field in cases:
         for value in BAD_VALUES:
@@ -114,10 +124,35 @@ def test_questionnaire_graph_has_bounded_validation_cost():
 def test_seeded_json_tree_corpus(web):
     login(web);org=call(web,'create_organization',name='Seeded fuzz')
     c=quiet(web);rng=random.Random(20261101);bad=[]
-    for _ in range(250):
+    for _ in range(1000):
         field=rng.choice(['title','owner','due_on','data','id','version'])
         body={'title':'bounded','data':{}}
         body[field]=rng.choice(BAD_VALUES[:-3])
         r=c.post(f'/api/platform/{org}/records/site',json=body)
         if r.status_code>=500:bad.append((field,repr(body[field]),r.status_code))
     assert not bad,bad[:12]
+
+
+def test_unicode_tokens_and_query_encoding_fail_closed(web):
+    login(web);org=call(web,'create_organization',name='Encoding corpus')
+    c=quiet(web)
+    r=c.post('/api/call/list_risks',json={'arguments':{'org':org}},headers={'x-csrf-token':b'\xe9'})
+    assert r.status_code==403
+    for key,value in [('q','\x00'),('offset',str(2**100))]:
+        assert c.get(f'/api/platform/{org}/records/site',params={key:value}).status_code==422
+    assert c.get('/api/sso/callback',params={'state':'\u00e9','code':'synthetic'}).status_code==403
+
+
+def test_spreadsheet_and_html_payloads_are_data(web):
+    from openpyxl import load_workbook
+    login(web);org=call(web,'create_organization',name='Export corpus')
+    payloads=['=1+1','+SUM(1,1)','-1+1','@SUM(1,1)','  =1+1','<img src=x onerror=alert(1)>']
+    for payload in payloads:call(web,'add_risk',org=org,title=payload,likelihood=2,impact=2)
+    result=web.get(f'/api/report/{org}/executive/xlsx')
+    assert result.status_code==200
+    wb=load_workbook(io.BytesIO(result.content))
+    for sheet in wb:
+        for row in sheet:
+            assert all(cell.data_type!='f' for cell in row),'Unexpected executable formula'
+    pdf=web.get(f'/api/report/{org}/executive/pdf')
+    assert pdf.status_code==200 and pdf.content.startswith(b'%PDF')
