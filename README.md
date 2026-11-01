@@ -188,3 +188,8 @@ Imported vendor data and policies are deliberately normalized to unverified; ori
 Treat this as a working prototype to iterate and verify, not a compliance attestation or suitable clinical data repository.
 
 **Authoritative implementation details:** `docs/PHASE3_IMPLEMENTATION_SPEC.md` and code under `src/`. Older phase-specific documents are retained for history and may describe functionality that was incomplete when written.
+
+
+## Security validation
+
+The November 1 security release adds bounded raw request handling, strict typed validation and regression coverage for fuzzing and SQL injection. Read [the timestamped security validation and remediation report](docs/SECURITY_VALIDATION_2026-11-01.md) for findings, tested source, deployed image, results and remaining operational ownership decisions.

@@ -1,5 +1,8 @@
 # Cyber Security Operations Online Studio: AWS web architecture
 
+This page records the initial web-runtime baseline. Later platform implementation supersedes the MFA, isolation, scanner, backup, recovery and build-source limitations described below. For current capabilities see [the platform guide](PLATFORM_GUIDE.md), and for the November 1 deployed fixes and validation see [the security assessment](SECURITY_VALIDATION_2026-11-01.md).
+
+
 The online service is an additional runtime for the existing domain services. The PySide6 desktop entry point and encrypted local SQLite vault remain available. Cloud requests use native relational PostgreSQL tables; they do not read or write desktop vault files.
 
 ## Request and trust boundaries

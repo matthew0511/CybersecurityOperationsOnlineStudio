@@ -34,3 +34,8 @@ This is owner-managed, shared-database multi-tenancy. It does not establish inde
 - Public HTTPS checks confirmed database readiness and byte-for-byte equality with the tested sign-in, documentation, account-recovery, audit-room, invitation (`/join` and `/portal`) and shared appearance assets. Authenticated workflow acceptance used synthetic fixtures; operator checks did not use owner credentials.
 - The runtime replacement retired restore verifier revision `:3`; revision `:4` is ACTIVE. The operations stack still references `:3`. The web application is healthy, but the scheduled restore check needs this reference repaired before it can run successfully. Automated database backups are separate from this check.
 - Automatic approval review rejected executing the initial secondary operations update because it changed the restore project, permissions and schedule outside the appearance request. A narrower prepared change set, `restore-active-revision-only-20261101`, changes only the `RestoreTaskArn` parameter to revision `:4`; it preserves the source commit and schedule expression/state. CloudFormation also lists dependent project, role and schedule-target reevaluations. This plan passed pre-deployment validation but has not been executed; explicit approval is needed. No new restore exercise was run in this appearance release.
+
+
+## Subsequent security release
+
+The November 1 security release preserves these appearance assets and tests. It repaired the operations restore-task reference to active revision 5, superseding the pending revision 3/4 maintenance note above. The source commit and monthly schedule were preserved. See [security validation and remediation](SECURITY_VALIDATION_2026-11-01.md) for the deployment and policy-verification evidence.
