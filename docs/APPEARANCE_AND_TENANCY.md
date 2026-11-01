@@ -23,3 +23,14 @@ This is owner-managed, shared-database multi-tenancy. It does not establish inde
 ## Validation
 
 `tests/appearance.test.cjs` checks saved/system preferences, invalid values, blocked storage, operating-system changes and tab synchronization. `tests/appearance-ui.cjs` uses real HTML/CSS/JavaScript for five page entry points in Light and Dark at desktop and mobile widths, plus reload, System and storage behavior. The existing workflow browser acceptance checks workspace navigation, questionnaires, branding, security and automated accessibility. Deployment must wait for the full build gates, including isolated PostgreSQL tests and hardened-container smoke testing.
+
+
+## Release evidence and pending maintenance
+
+- Application commit: `7ec9826c35d8ad0a80f584070aaa8d43104f2ae1`.
+- Image: `appearance-20261101-v1`; digest `sha256:729fde1ef537fa4a8a66b28beb1110e4e9415362df57920ddbf8dd60a27e029e`.
+- CodeBuild: `cyber-ops-online-studio-web:2134c3fe-44f4-4451-b9df-c7bea52573c2`, SUCCEEDED. 83 backend tests (one existing test-client deprecation warning), seven interface logic tests, appearance and workflow browser suites, automated accessibility, dependency audit, static analysis and the hardened non-root/read-only container smoke test passed. ECR scan completed without reported findings.
+- ECS deployment completed at `2026-11-01T13:32:46Z` (07:32:46 America/Chicago). Runtime task revision: `cyber-ops-online-studio-web:12`; desired/running count: two. CloudFormation runtime stack reached UPDATE_COMPLETE. All seven Studio alarms were OK.
+- Public HTTPS checks confirmed database readiness and byte-for-byte equality with the tested sign-in, documentation, account-recovery, audit-room, invitation (`/join` and `/portal`) and shared appearance assets. Authenticated workflow acceptance used synthetic fixtures; operator checks did not use owner credentials.
+- The runtime replacement retired restore verifier revision `:3`; revision `:4` is ACTIVE. The operations stack still references `:3`. The web application is healthy, but the scheduled restore check needs this reference repaired before it can run successfully. Automated database backups are separate from this check.
+- Automatic approval review rejected executing the initial secondary operations update because it changed the restore project, permissions and schedule outside the appearance request. A narrower prepared change set, `restore-active-revision-only-20261101`, changes only the `RestoreTaskArn` parameter to revision `:4`; it preserves the source commit and schedule expression/state. CloudFormation also lists dependent project, role and schedule-target reevaluations. This plan passed pre-deployment validation but has not been executed; explicit approval is needed. No new restore exercise was run in this appearance release.
