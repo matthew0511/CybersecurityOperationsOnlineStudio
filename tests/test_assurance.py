@@ -65,7 +65,9 @@ def test_metrics_denominators_and_my_work(web):
     save(web,org,'as_metric','Completion',{'module':'control','measure':'completed_percent','target':90,'direction':'at_least'})
     s=state(web,org);assert s['metrics'][0]['value']==0 and s['metrics'][0]['denominator']==1
     assert any(r['title']=='Assigned' and r['overdue'] for r in s['my_work'])
-    assert s['quality']
+    assert s['quality']==[]
+    save(web,org,'control','Assigned')
+    assert any(i['reason']=='possible_duplicate_title' for i in state(web,org)['quality'])
     report=post(web,org,'/editions',{'template':'assurance','format':'xlsx'});assert report['bytes']>100
 
 def test_catalog_compare_migrate_preserves_history(web):
